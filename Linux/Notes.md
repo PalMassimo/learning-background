@@ -497,9 +497,180 @@ $ wall
 $ write spiderman
 ```
 
+### Linux Account Authentication 
+When we need to manage thousand of users and their authentication, we need an active directory service. The protocol used is Lightweight Directory Access Protocol - `LDAP`, and the most famous implementations of it are:
+
+- Windows Active Directory: for windows os
+- OpenLDAP: for Linux os
+- IDM: for RedHat
+- IBM Directory Server: for IBM
+
+to allow Windows to authenticate against Linux, Samba created WinBIND.
+
+### System Utility Commands
+The commands are `date`, `uptime`, `hostname`, `uname`, `which`, `cal`, `bc` (a.k.a. binary calculator).
+
+The `uptime` command tell us the system time, for how long the system has been running, the number of users currently logged into the system and the average CPU load (average number of jobs in the system's run queue) for the 1,5 and 15 minutes.
+
+```bash
+$ date
+Sun, Dec 31, 2023 12:02:59 PM
+$ uptime
+11:18:23,up 83 days,load average: 0.16,0.03,0.01
+$ uname
+Linux
+$ uname -a   # to get more information
+$ which pwd  # where pwd command is location
+$ cal        # show the calendar
+$ cal 6 1997 # show the calender on June 1997
+$ bc         # to run basic calculator
+```
+
+### Process and Services Commands
+
+#### The System Control Command
+The `systemctl` command allows to start an application and replace the `system` command. 
+
+```bash 
+$ systemctl start  firewalld.service 
+$ systemctl stop   firewalld.service 
+$ systemctl status firewalld.service 
+$ systemctl enable  firewalld # to start service at bootstrap
+$ systemctl disable firewalld # to not run service at bootstrap
+$ systemctl reload            # to apply configuration changes
+$ systemctl restart firewalld.service          
+$ systemctl list-units --all  # to list all services
+$ systemctl list-units        # to list only the active ones
+```
+
+The `systemctl list-units --all` returns a table where
+- UNIT: the `systemd` unit name
+- LOAD: whether the unit's configuration has been parsed by `systemd`. The configuration of loaded units is kept in memory
+- ACTIVE: a summary state about whether the unit is active. This is usually a fairly basic way to tell if the unit has started successfully or not
+- SUB: this is a lower-level state that indicates more detailed information about the unit. This often varies by unit type, state, and the actual method in which the unit runs.
+- DESCRIPTION: a short textual description of what the unit is or does
+
+To add a third party service or a custom one, we have to add the service under systemctl managment creating a file called `servicename.service` in `/etc/systemd/system/`
+
+The `systemctl` command can be used also to control the system
+
+```bash
+$ systemctl poweroff
+$ systemctl halt
+$ systemctl reboot
+```
+
+#### The Process Status Command
+The `ps` command displays all the currently running processes in the system.
+
+It shows a table where
+- PID: process id of the process
+- TTY: terminal type that the user logged-in to
+- TIME: amount of CPU in minutes and seconds that the process has been running
+- CMD: name of the command
 
 
+```bash
+$ ps
+$ ps -e  # shows all running processes
+$ ps -ef # ps -e in full format listing
+$ ps aux # ps -e in BSD format
 
+$ ps -u username # shows all processes by username
+```
+
+#### Top Command
+The `top` command is used to show the Linux processes and it provides a real-time view of the running system. It shows the summary infomation of the system and the list of the processes or threads which are currently managed by the kernel. The command refresh the table every 3 seconds.
+
+The top command returns a table where:
+- PID: process ID
+- USER: username of owner of task
+- PR: the PR field shows the scheduling priority of the process from perspective of the kernel
+- NI: represents a Nice Value of task. A negative nice value implies higher priority, and vice versa
+- VIRT: total virtual memory used by the task
+- RES: memory consumed by the process in RAM
+- SHR: represents the amount of shared memory used by a task
+- S: shows the process state in the single-letter form
+- %CPU: represent the cpu usage
+- %MEM: shows the memory usage of task
+- TIME+: cpu time, the same as 'TIME' but reflecting more granularity through hundreds of seconds
+- COMMAND: the command caused the process
+
+When in interactive mode of `top`, we can press 
+- `c` to show the absolute path of the commands
+- `k` to kill a particular process by pid
+- `Shift+m` and `Shift+p` to sort all Linux running processes by memory usage
+
+```bash
+$ top
+$ top -u spiderman # shows only spiderman processes
+$ 
+```
+
+#### Kill Command
+The `kill` command is used to terminate process manually, sending a signal which ultimately terminates or kills a particular process or group of processes.
+
+To get pid of running processes use `top` or `ps`
+
+The `kill` commmand has options, in which we can specify the signal name or the signal number (or id).
+
+```bash 
+$ kill 94      # kills the process with pid 94
+$ kill -l      # get a list of all signal names or numbers
+$ kill -1  94  # restart
+$ kill -2  94  # interrupt (like ^C)
+$ kill -9  94  # forcefully kill the process
+$ kill -15 94  # gracefully kill the process
+
+$ killall 94 # to kill a process and its children
+$ pkill      # kill by process name
+```
+
+#### The Crontab Command
+
+The `crontab` command allows to schedule tasks at specified times. 
+The `crond` is the deamon that manages the schedulings.
+
+The entry has to be inserted in a particular format
+
+![Cron Job](images/cron-job.jpg)
+
+```bash
+$ crontab -e # edit the crontab
+$ crontab -l # list the crontab entries
+$ crontab -r # remove a crontab entry
+
+$ crond      
+$ systemctl status crond # to manage the crond service
+```
+
+#### The At Command
+The `at` command allows to schedule a command that will run in the future. When the command is run it will enter interactive mode and to get out just press `^D`. 
+
+```bash
+$ at 09:34 PM         # schedule a job
+$ at 02:45 PM  101621 # 16th Oct 2021
+$ at 4 PM + 4 days    # 4 days starting from now 
+$ at now +5 hours
+$ at 8:00 AM Sun
+$ at 10:00 AM next month
+
+$ atq          # list entries
+$ atrm 12      # remove the 12th entry
+
+$ atd         # at deamon that manages scheduling
+$ systemctl status atd # manage the atd service
+```
+
+#### Additional Cron Jobs
+By default, there are 4 different types of cronjobs: hourly, daily, weekly or monthly based. Hence, if a crontab jon falls in one of these types, instead of running `crontab -e` we can go in one of relatives directories `cron.hourly`, `cron.monthly`, `cron.daily`, `cron.weekly` under the `/etc/` directory. The timing for each are set in `/etc/anacrontab`, except the hourly based that is in `/etc/cron.d/0hourly` (is the file that defines when the hourly based jobs run).
+
+For instance, to define a job that executes daily just create a file with the commands and put it under `/etc/daily/` folder. But at which time the daily job will run? To know it run `cat /etc/anacrontab`. The same for monthly and weekly jobs. For hourly based run `cat /etc/cron.d/0hourly`
+
+### Process Managment
+
+#### Background
+To put a process in the background, 
 
 
 
