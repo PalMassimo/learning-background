@@ -109,3 +109,36 @@ To run an application in Kubernetes, you first need to package it up into one or
 The description includes information such as the container image or images that contain your application components, how those components are related to each other, and which ones need to be run co-located (together on the same node) and which don’t. For each component, you can also specify how many copies (or replicas) you want to run. Additionally, the description also includes which of those components provide a service to either internal or external clients and should be exposed through a single IP address and made discoverable to the other components.
 
 When the API server processes your app’s description, the Scheduler schedules the specified groups of containers onto the available worker nodes based on computational resources required by each group and the unallocated resources on each node at that moment. The Kubelet on those nodes then instructs the Container Runtime (Docker, for example) to pull the required container images and run the containers. After submitting the descriptor to Kubernetes, it will schedule the specified number of replicas of each pod to the available worker nodes. The Kubelets on the nodes will then tell Docker to pull the container images from the image registry and run the containers.
+
+# First Steps with Docker and Kubernetes
+
+## Run an image
+Use `docker run` command and specify what image to download and run and (optionally) what command to execute. Docker checked to see if the `busybox:latest` image is already present on the local machine. If it does not, docker downloads the image. 
+
+Docker supports having multiple versions or variants of the same image under the same name. Each variant must have a unique tag. When referring to images without explicitly specifying the tag, Docker assumes we are reffering to the `latest` tag.
+
+```bash
+$ docker run <image>
+$ docker run busybox echo "Hello world!"
+```
+
+## Create an image
+To package an app to an image we have to create the `Dockerfile`, which contains a list of instructions that Docker performs when building the image. 
+
+By default, The Dockerfile needs to be in the same directory of the source code.
+
+In the following
+- the `FROM` defines the **base image**
+- the `ADD` we add `app.js` file into the root directory of the image
+- the `ENTRYPOINT` we define the command that will be executed when the image is run
+
+``` docker
+FROM       node:7
+ADD        app.js /app.js
+ENTRYPOINT ["node", "app.js"]
+```
+
+## Build an image
+
+
+
