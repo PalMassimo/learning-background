@@ -112,6 +112,15 @@ When the API server processes your app’s description, the Scheduler schedules 
 
 # First Steps with Docker and Kubernetes
 
+Common docker commands
+
+```bash 
+$ docker images
+$ docker ps
+$ docker rmi image_id
+```
+
+
 ## Run an image
 Use `docker run` command and specify what image to download and run and (optionally) what command to execute. Docker checked to see if the `busybox:latest` image is already present on the local machine. If it does not, docker downloads the image. 
 
@@ -140,5 +149,32 @@ ENTRYPOINT ["node", "app.js"]
 
 ## Build an image
 
+The build process isn't performed by the Docker client. The contents of the whole directory are uploaded to the Docker daemon and the image is built there. The client and the daemon don't need to be on the same machine.
+If we're using Docker on a non-Linux OS, the client is on our host OS, but the daemon runs inside a VM, because all the files are uploaded to the daemon.
+
+We could build the images manually bu running a container from an existing image, executing commands in the container, exiting the container, and committing the final state as a new image. This is exactly what happens when we build from a Dockerfile.
+
+``` bash 
+$ docker build --tag nodeserver:2.0 .
+```
 
 
+## Run an image
+If we're not running the Docker daemon on your local machine we'll need to use the hostname or IP of the VM running the daemon instead of localhost (e.g to perform `curl` requests to see if the container is up). We can look it up through the `DOCKER_HOST` environment variable.
+
+
+```bash
+$ docker run --name kubia-container -p 8080:8080 --detach kubia
+$ docker inspect kubia-container
+$ docker exec -it kubia-container bash
+```
+
+Th`-i` option is to keep `stdin` open, `-t` is to allocate a pseudo terminal (TTY). We need both because without the first we can not type any command, if we leave out the second the command prompt won't be displayed and some commands will complain about the `TERM` variable not being set.
+
+## Stop Container 
+To stop and remove a container
+
+```bash
+$ docker stop kubia-container
+$ docker rm   kubia-container
+```

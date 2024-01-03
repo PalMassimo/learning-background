@@ -407,7 +407,7 @@ Other examples
 ``` bash
 $ useradd spiderman     # create spiderman user
 $ id spiderman          # to get uid, gid and groups
-$ groupadd superheroes  
+$ groupadd superheroes  # create a group called superheroes
 $ cat /etc/group        # show usergroup info
 $ userdel -r spiderman  # delete the user and its home dir
 $ groupdel superheroes
