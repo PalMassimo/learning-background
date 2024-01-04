@@ -670,8 +670,15 @@ For instance, to define a job that executes daily just create a file with the co
 ### Process Managment
 
 #### Background
-To put a process in the background, 
+To stop a process that runs in the background, press `^Z`.
 
+To don't terminate a process when closing the console use `nohup process &`. The `nohup` commands tells the shell to don't send any signal to stop the command. Alternatively, we can use `nohup process > /dev/null 2>&1 &`.
+
+To prioritize a process use `nice` command. The _niceness_ scale goes from -20 to 19: the lower the number, the higher is the priority. 
+
+```bash
+$ nice -n 5 process
+```
 
 
 
