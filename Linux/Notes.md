@@ -207,7 +207,7 @@ $ cp -r directory_1 new/destination/    # copy directory recursively and its con
 $
 $ rmdir path/to/dir                     # remove empty directory
 $ rm -r path/to/dir                     # remove a directory and its content recursively
-$ rm *.txt                              # remove all files that end with .txt in the current directory
+$ rm *.txt                              # remove all files that end with .txt 
 $
 $ mkdir dir                             # creates a directory named dir
 $ mkdir -p dir_1/dir_2                  # creates a nested directory 
@@ -669,10 +669,9 @@ For instance, to define a job that executes daily just create a file with the co
 
 ### Process Managment
 
-#### Background
 To stop a process that runs in the background, press `^Z`.
 
-To don't terminate a process when closing the console use `nohup process &`. The `nohup` commands tells the shell to don't send any signal to stop the command. Alternatively, we can use `nohup process > /dev/null 2>&1 &`.
+To don't terminate a process when closing the console use `nohup process &`. The `nohup` commands tells the shell to don't send any signal to stop the command. Everytime we run `nohup` command it creates `nohup.out` to store information about the process. Alternatively, we can use `nohup process > /dev/null 2>&1 &` to have a minimal printings.
 
 To prioritize a process use `nice` command. The _niceness_ scale goes from -20 to 19: the lower the number, the higher is the priority. 
 
@@ -680,5 +679,138 @@ To prioritize a process use `nice` command. The _niceness_ scale goes from -20 t
 $ nice -n 5 process
 ```
 
+``` bash 
+$ bg
+$ fg
+$ nohup sleep 73 > /dev/null 2>&1 &
+$ nice -n -20 sleep 10 
+$ nice -n 5 sleep 10 
+```
+
+### System Monitoring
+
+The `df` command gives the disk partition information.
+
+The display, or diagnostic, message `dmesg` command is used to display the kernel ring buffer messages. The kernel ring buffer is a circular buffer that stores messages related to the operation of the kernel, including information about hardware detection, driver initialization.
+
+The input output statistic `iostat` command shows statistics about devices and partitions on the system.
+
+The `netstat` command shows network-related information.
+
+The `free` command shows information about the system's memory usage, including both physical and swap memory. It provides details about the total amount of available, used, and free memory, as well as the memory used for buffers and caches.
+
+When pc is started, all system resources into files located in the `/proc/` directory. Important files are `cpuinfo` and `meminfo`
+
+```bash
+$ df
+$ df -h 
+$ iostat
+$ iostat 1     # to refresh output every 1 second
+$ netstat
+$ netstat -rnv # to see kernel IP routing table
+$ free
+$ cat /proc/cpuinfo
+$ cat /proc/meminfo
+```
+
+### Log Monitoring
+All systems logs are kept under `/var/log` directory unless we specify otherwise.
+
+```bash 
+$ cd /var/log
+$ cat boot.log # it is overwritten at every bootstrap
+$ cat chronyd  # newer version of NTP
+$ cat cron
+$ cat mailog
+$ cat secure   # records about login and logout activities
+$ cat messages # logs about system activities
+$ cat httpd    # apache application logs
+```
+
+### System Maintenance
+
+Main system maintenance commands are `shutdown`, `reboot`, `halt` to shutdown the system without waiting current processes to terminate (just as holding physical power off button). 
+
+The `init` command is meant to shutdown or restart the system specifying a different level, from `0` to `6`
+
+
+```bash
+$ shutdown
+$ reboot 
+$ halt 
+$ init 0   # shutdown the system
+$ init 6   # reboot   the system
+```
+
+### System Hostname
+The hostname is the name of the Linux machine. The name is saved in `/etc/hostname` or in `/etc/sysconfig/network` on previous linux versions. To change the hostname we can use modify the content of `hostname` file or run the `hostname` command. Reboot the system to be sure to apply changes
+
+``` bash
+$ hostname                              # show the hostname
+$ hostnamectl set-hostname new_hostname # change hostname
+```
+
+### System Information
+We can use `uname` command to get general system information and `dmidecode` to dump a computer's DMI (a.k.a. SMBIOS) table contents. The `arch` command gives the architecture of the machine.
+
+```bash
+$ uname
+$ uname -a
+$ dmidecode 
+$ arch
+```
+
+### Terminal Control Keys
+Main terminal control keys
+
+- `^U`: erase everything typed on the command line
+- `^C`: stop/kill a command
+- `^Z`: suspend a command
+- `^D`: exit from an interactive program (signals end of data)
+
+### Terminal Commands
+We can use the command `clear` to clear the screen and the `exit` command to exit out the shell, terminal or user session.
+
+The `script` command stores terminal activities in a log file named by default `typescript`. It stores not only the commands but also what they print on stdout.
+
+``` bash
+$ script  # script file.log to have a different filename
+Script started
+$ ls -ltr
+$ exit
+exit
+Script done
+```
+
+### SOS Report
+With sos report we mean collect and package diagnostic and support data. The sos commands are in the `sosreport` package. Logs and other information are packaged and sent to the support.
+
+```bash 
+$ sosreport
+```
+
+### Environment Variables
+Environment variables are a dynamic-named value that can affect the way running processes will behave on a computer. They are part of the environment in which a process runs.
+
+To print all environment variables run `printenv` or `env`. 
+
+To show the value of a particular environment variable `echo $SHELL`. To set a new one `export TEST=test`.
+
+To set an environment variable permanently we have to edit `~/.bashrc` file and add the lines `TEST='test'` and `export TEST`.
+
+To set global environment variable permanently we have to edit the `/etc/profile` or `/etc/bashrc`.
+
+```bash
+$ env
+$ printenv
+$ echo $SHELL
+$ export TEST=test
+```
+
+### Special Permissions
+
+
+
+## Shell Scripting
 
 
