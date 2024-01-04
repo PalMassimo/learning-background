@@ -178,3 +178,69 @@ To stop and remove a container
 $ docker stop kubia-container
 $ docker rm   kubia-container
 ```
+
+
+## Minikube
+Minikube is a tool that sets up a single-node cluster that is great for both testing kubernetes and developing apps locally.
+
+```bash
+$ minikube start
+$ minikube stop
+```
+
+## Kubectl
+Kubectl is a CLI client that allows to interact with kubernetes clusters. It issues REST requests to the Kubernetes API server running on the master node.
+
+The `kubectl get` can list all kinds of kubernetes objects
+
+```bash
+$ kubectl cluster-info              # get information about cluster
+$ kubectl get nodes
+$ kubectl describe node node-name
+```
+
+
+### tab completion
+To enable tab completation in bash, we have to install `bash-completion` package and then run 
+
+```bash
+$ source < (kubectl completion bash)
+```
+
+add it also in `~/.bashrc`
+
+
+### How to run an app on cluster
+The images are pulled from a docker repository (by default DockerHub). We can do it in many ways, where the manual one is
+
+```bash
+$ kubectl run kubia --image=palmisanomassimo/kubia --port 8080 --generator=run/v1
+```
+
+where the `--generator` flag is to make kubernetes creating a replication controller instead of a deployment.
+
+With the previous command, kubernetes created a new replication controller object in the cluster by sending a REST http request to the Kubernetes API server. The replication controller then created a new pod, which was then scheduled to one of the worker nodes by the Scheduler. The kubelet on that node saw that the pod was scheduled to it and instructed Docker to pull the specified image from the registry because the image wasn't available locally. After downloading the image, Docker created and ran the container.
+
+NOTE: with **scheduling** means assigning the pod to a node
+
+
+## Pods
+A pod is a group of one or more tightly related containers that will always run togheter on the same worker node and in the same Linux namespace(s). Each pod is like a separate logical machine with is own IP, hostname, processes and so on, running a single application.
+
+To see all running pods run `kubectl get pods`. 
+
+The `kubectl describe pod pod-name` is to get more information about a pod but is also useful when the pod stays stuck in the `pending` status.
+
+```bash
+$ kubectl get po
+$ kubectl get pods
+
+$ kubectl describe pod pod_name
+
+$ kubectl delete pod pod_name
+```
+
+
+
+
+
