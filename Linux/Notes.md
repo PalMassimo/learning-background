@@ -132,7 +132,19 @@ We can use ssh to copy files from the client to the server
 $ scp file/to/copy username@server_ip destination/path
 ```
 
-To get ip address run `ipconfig` on windows and `ifconfig` on linux
+To get ip address in windows
+
+```cmd
+> ipconfig
+```
+
+in Linux
+
+```bash
+$ ifconfig
+$ hostname -I
+```
+run `ipconfig` on windows and `ifconfig` on linux. Alternatively, just run 
 
 ### File permissions
 To change the permissions of a file or a directory we use the `chmod` command
@@ -808,8 +820,45 @@ $ export TEST=test
 ```
 
 ### Special Permissions
+In Linux exist three additional permissions:
+- `setuid`: is the bit that tells Linux to run a program with the effective user id of the owner instead of the executor (e.g. `passwd`)
+- `setgid`: is the bit telling Linux to run a program with the effective group id of the owner instead of the executor (e.g. `locate` or `wall`). This bit is present for only files which have executable permissions.
+- `sticky bit`: is the bit set on files/directories that allows only the owner or root to delete those files
 
+For instance, to update `/etc/shadow` file we need root permissions. Hence, we run the command `passwd` (that has the bit setuid) to update the file as we were root instead of spiderman. 
 
+The `seuid` and `setgid` are not commands.
+
+special permissions that can be set to files or directories using setuid, setgroupid and sticky bit.
+
+To find all executables in Linux with setuid and setgid permissions:
+
+```bash
+find / -perm /6000 -type f
+```
+
+To add or remove special permissions at the user or group level
+
+```bash
+$ chmod u+s script.sh
+$ chmod g+s script.sh
+$ chmod u-s script.sh
+$ chmod g-s script.sh
+```
+
+The first two bits work on `C` or `C++` programs, not with bash scripts.
+
+```bash
+$ ls -l 
+$ ls -l /tmp
+drwxrwxrwt. 27 root root tmp # the t protect tmp from deletion
+```
+
+To add the sticky bit to a directory
+
+```bash
+$ chmod +t dir/ 
+```
 
 ## Shell Scripting
 
