@@ -408,7 +408,7 @@ $ sed '8!s/Seinfeld/S/'      # replace every Seinfeld with S except in line 8
 To manage user account we use the commands `useradd`, `groupadd`, `userdel`, `groupdel` and `usermod`.
 The files to manage a user account are three: `/etc/passwd`, `/etc/group` and `/etc/shadow`. 
 
-Suppose we wanto to create a user spiderman having a description "awesome user", he belongs to the group superheroes, assign to him the bash shell and as home directory `/home/spiderman`. We'll run
+Suppose we want to create a user spiderman having a description "awesome user", he belongs to the group superheroes, assign to him the bash shell and as home directory `/home/spiderman`. We'll run
 
 ``` bash 
 $ useradd -g superheroes -s /bin/bash -c "awesome user" -m -d /home/spiderman spiderman
@@ -423,7 +423,7 @@ $ groupadd superheroes  # create a group called superheroes
 $ cat /etc/group        # show usergroup info
 $ userdel -r spiderman  # delete the user and its home dir
 $ groupdel superheroes
-$ usermod -G superheroes spiderman # assign spiderman to superhoeroes group
+$ usermod -G superheroes spiderman # assign spiderman to superhoeroes group as additional group
 $ chgrp -R superheroes spiderman # recursively change group
 ```
 
@@ -861,5 +861,214 @@ $ chmod +t dir/
 ```
 
 ## Shell Scripting
+
+### Shell
+A shell is the interface between users and the os Kernel.
+
+To find users shells run `cat /etc/passwd`, instead to find your own shell run `echo $0`.
+
+To list all system available shells run `cat /etc/shells`. The most common are
+- sh
+- bash
+- csh and tcsh
+- ksh
+- GNOME
+- KDE  
+
+where GNOME and KDE are graphical user interfaces.
+
+### Shell scripting
+A shell script is an executable file containing multiple shell commands that are executed sequentially.
+
+#### Basics
+To use a variable, we use the `$` and to define one we use `=` with no spaces. To run a variable in `echo` command
+
+```bash
+#!/bin/bash
+
+username='Palma Selvatica' # no spaces
+
+echo "Hi $username!"
+
+echo "Tell me your name"
+read name
+
+echo "Your name is $name, I hope I understand right"
+
+hostname_command=hostname # we can run the command hostname with $hostname_command
+echo The server name is $hostname_command
+
+```
+
+#### If Else statements
+
+If-else statements, basic syntax
+
+```bash
+#!/bin/bash
+
+count=10
+
+if [ $count -eq 11 ] # put spaces between []
+then 
+    echo "Count is not eleven"
+else 
+    echo "Count is eleven"
+fi
+```
+
+Script that verifies if a file exists
+
+```bash
+#!/bin/bash
+
+if [ -e /home/massimo/bau ] # put spaces between []
+then 
+    echo File bau exist
+else 
+    echo File bau does not exist
+fi
+```
+
+#### For loop Statement
+
+The `do` keyword cannot stay in the same line of `for`
+
+```bash
+#!/bin/bash
+for i in 1 2 3 4 5
+do
+    echo The value of i is $i 
+done
+
+for fruit in apple banana peace
+do
+    echo A fruit $fruit 
+done
+
+```
+
+#### Do While Statement
+The basic syntax is 
+
+```bash 
+#!/bin/bash
+while [ condition ]
+do
+    command_1
+    ...
+    command_N
+done
+```
+
+To change variable value use `expr`
+
+```bash
+#!/bin/bash
+
+count=100
+i=1
+
+while [ $count -gt 0 ]
+do
+    echo "$i)" $count
+    count=`expr $count - 1`
+    ((count -= 1))
+    ((count--))
+    ((i++))
+done
+
+```
+
+#### Case statement
+The `*` acts like `default` in switch case. The `;;` is to separate one case from another and `esac` is `case` written backwards.
+
+```bash
+#!/bin/bash
+
+echo "Enter a fruit: "
+read fruit
+
+# Case statement to check the value of the variable
+case $fruit in
+  "apple")
+    echo "You selected an apple."
+    ;;
+  "banana")
+    echo "You selected a banana."
+    ;;
+  "orange")
+    echo "You selected an orange."
+    ;;
+  *)
+    echo "Unknown fruit."
+    ;;
+esac
+
+```
+
+#### Connecting to a remote host
+To connect to a remote host we can use the `ping` command. 
+
+The `$?` returns the exit code of the last command executed
+
+```bash
+#!/bin/bash
+
+host=localhost
+ping $host &> /dev/null
+        if [ $? -eq 0 ]
+        then
+        echo $host is reachable
+        else
+        echo $host is not reachable
+        fi
+```
+
+To ping multiple hosts we can use the `cat` command and iterate over its output
+
+```bash
+#!/bin/bash
+
+ip_hosts="./hosts"
+
+for ip in $(cat $ip_hosts)
+
+do
+   ping $ip &> /dev/null
+   if [ $? -eq 0 ]
+   then
+   echo $ip is reachable
+   else
+   echo $ip is not reachable
+   fi
+done
+```
+
+### Aliases
+The command `alias` allows to create a short name for one or more commands. Some aliases are created by Linux.
+
+Aliases created from the shell are emphimeral
+
+```bash
+$ alias               # shows alias
+$ alias ls="ls -al"
+$ alias pl="pwd; ls"
+$ alias dir="ls -l | grep ^d"
+$ alias d="df -h | awk '{print \$6}'"  # \$ otherwise bash thinks is a variable
+$ unalias d           # removes alias
+```
+
+Aliases can be global or scoped to a particular user. To define user aliases we have to add them in `/home/spiderman/.bashrc`, for global aliases edit the `/etc/bashrc` configuration file.
+
+### History
+All commands we run are recorded and stored in `~/.bash_history`. To get the command history just run `history`. To run the command on the 10th row recorded in the history run `!10`
+
+```bash
+$ history
+$ !10
+```
+
+
 
 
