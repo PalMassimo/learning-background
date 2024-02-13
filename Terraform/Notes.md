@@ -76,6 +76,58 @@ To know what resources have to be destroyed or created when we run `terraform ap
 
 With `terraform refresh` terraform tries to reconcile the state that Terraform knows (i.e. the one defined in the `terraform.tfstate`) with the current state (i.e. the deployed infrastructure).
 
+## Read, generate and edit configuration
+
+### Variables
+To define a variable just create a terraform file and name it as `variables.tf` or `input.tf`, but this is just a convention.
+
+```terraform
+variable "instancetype" {}
+```
+
+Now, when running the `terraform` commands the cli will ask us to input variable values. However, there are other ways to define variables values:
+
+- environment variables
+- command line flags
+- from a file
+- default values
+
+In case of command line flags
+
+```terraform
+terraform plan -var="ec2_instancetype=t3.micro"
+```
+
+To avoid input everytime from the cli the input variables values, we can define such values once in a file called `terraform.tfvars`:
+
+```terraform
+instancetype="t3.medium"
+```
+
+if we have named the file differently, we have to specify it when run the terraform commands, like `terraform plan -var-file=custom.tfvars`
+
+We can assign a default value to a variable. In this case, if the value is not specified, the default one will be assumed
+
+```terraform
+variable "instancetype" {
+    default = "t3.small"
+}
+```
+
+The last approach is using the environment variables. In this approach we have to define an environment variable using the following convention:
+
+```bash
+export TF_VAR_instancetype=t3.small
+```
+```cmd
+setx TF_VAR_instancetype=t3.small
+```
+
+In case of windows, we have to open another cmd instance to see the new environment variable.
+
+
+
+
 
 
 
