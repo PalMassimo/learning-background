@@ -464,6 +464,129 @@ resource "aws_instance" "web" {
 The `null_resource` implements the standard resource lifecycle but takes no further action. The `triggers` argument allows specifying an arbitrary set of values that, when changes, will cause the resource to be replaced.
 
 
+## Terraform Modules
+
+### Referencing module outputs
+To reference an output variable of a module use the syntax `module.module_name.output_variable_name`.
+
+### Terraform Registry
+The **Terraform Registry** is a repository of modules written by the terraform community. We can find verified modules that are maintained by various third party vendors.
+
+Verified modules are reviewed by HashiCorp and actively maintained by contributors to stay up to date and compatible with both terraform and their respective providers. Such modules are marked tiwh a blue verification badge and can be written only by a small group of trusted HashiCorp partners. 
+
+It follows an example of a module present in the terraform registry
+
+```terraform
+module "ec2-instance" {
+    source  = "terraform-aws-modules/ec2-instance/aws"
+    version = "2.13.0"
+    ...
+}
+```
+
+### Publish on Terraform Registry
+Anyone can publish and share modules on the terraform registry. Published modules support versioning, automatically generate documentation, allow browsing version histories, show examples and readmes, and more. 
+
+A module in order to be published on the terraform registry must follow the following conventions
+
+| Requirement           | description  |
+| :-------------------: | ---------------------------------------------- |
+| GitHub                | the code must be on a github public repository                           |
+| Naming convention     | the module name must follow the syntax `terraform-<provider>-<name>`     |
+| repository convention | github repository description is used to populate the module description |
+| module structure      | module structure must adhere to the standard module structure            |
+| x.y.z release tags    | registry uses tags to identify module versions. Release tag names must be a semantic version, which can optionally be prefixed with a `v` (e.g. `v1.0.4`, `0.9.2`)
+
+The module structure can be very simple
+
+```bash
+$ tree minimal-module/
+.
+|-- README.md
+|-- main.tf
+|-- variables.tf
+|-- outputs.tf
+```
+
+or more structured
+
+```bash
+$ tree complex-module/
+.
+|-- README.md
+|-- main.tf
+|-- variables.tf
+|-- output.tf
+|-- ...
+|-- modules/
+|   |-- nestedA/
+|   |   |-- README.md
+|   |   |-- variables.tf
+|   |   |-- main.tf
+|   |   |-- outputs.tf
+|   |-- nestedB/
+|   |   |-- README.md
+|   |   |-- variables.tf
+|   |   |-- main.tf
+|   |   |-- outputs.tf
+|--exmaples/
+|   |-- exampleA/
+|   |   |-- main.tf
+|   |-- exampleB/
+|       |-- main.tf
+```
+
+### Terraform Workspaces
+Terraform allows to have multiple workspaces, with each of the workspace we can have different set of environment variable associated. The command to work with workspaces is `terraform workspace`. To show all possible commands associated, run `terraform workspace -h`
+
+```bash
+$ terraform workspace list       # list all terraform workspaces
+$ terraform workspace new dev    # create a workspace named dev
+$ terraform workspace show       # show the current workspace
+$ terraform workspace select dev # change workspace
+```
+
+To dinamically use a variable value based on the workspace, see the example below
+
+```bash
+resource "aws_instance" "ec2" {
+    ami          = "ami-8932nkldsf28"
+    instance_type = lookup(var.instance_type, terraform.workspace)
+}
+
+variable "instance_type" {
+type = "map"
+
+default = {
+    default = "t3.nano"
+    dev     = "t3.micro"
+    prod    = "t3.large"
+}
+```
+
+
+When using workspaces (after the apply) terraform will create the `terraform.tfstate.d` directory, in which will find one directory for every workspace.
+
+```
+.
+|--terraform.tfstate.d/
+|  |--dev/
+|  |  |-- terraform.tfstate
+|  |--test/
+|  |  |-- terraform.tfstate
+|  |--prod/
+|  |  |-- terraform.tfstate
+```
+
+The `terraform.tfstate` for the `default` workspace is always in the root folder of the terraform project.
+
+
+
+
+
+
+
+
 
 
 
