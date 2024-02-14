@@ -379,12 +379,89 @@ In both cases in the state terraform adds in each resource a field `index_key` f
 As a rule of thumb, we use `count` to create resources very similar to each others. In all other cases, generally `for_each` is better.
 
 
+## Provisioners
 
+Terraform can turn provisiones both at the time of resource creation as well as destruction. There are two types of `provisioners`:
+- `local-exec`:  allow to invoke local executable after a resource is created
+- `remote-exec`: invokes a script on a remote resource after it is created
 
+### remote exec
+We can use remote exec provisioner to run cli commands to an ec2 after is created. Suppose to install on it an NGinx server, we can define the ec2 resource as follows
 
+```terraform
+resource "aws_instance" "ec2" {
+  ami           = "ami-0c7217cdde317cfec"
+  instance_type = "t3.micro"
+  key_name      = "ec2-keypair"
 
+  connection {
+    type        = "ssh"
+    user        = "ec2-user"
+    private_key = file("${path.module}/ssh/ec2-keypair.pem")
+    host        = self.public_ip
+  }
 
+  provisioner "remote-exec" {
+    inline = [
+      "sudo amazon-linux-extras install -y nginx-1",
+      "sudo systemctl start nginx"
+    ]
+  }
+}
+```
 
+### local exec
+It follows an example of local exec. The command runs after the apply
+
+```terraform
+resource "aws_instance" "ec2" {
+    ami           = "ami-0c7217cdde317cfec"
+    instance_type = "t3.micro"
+    
+    provisioner "local-exec" {
+        command = "echo ${aws_instance.ec2.private_ip} >> ec2_privateip.txt"
+    }
+}
+```
+
+### Provisioner types
+There are two primary types of provisioners
+
+| Provisioner Type | description                           |
+| :--------------: | ------------------------------------- |
+| creation time    | runs **only** during creation         |
+| destroy time     | runs before the resource is destroyed |
+
+If a creation-time provisioner fails, the resource is marked as `tainted`. When not specified, the provisioner is of the type creation time. To mark it as destroy time type
+
+```terraform
+provisioner "remote-exec" {
+    when   = destroy
+    inline = [ "sudo yum -y remove nano" ]
+```
+
+### Provisioner failure behaviour
+By default, provisioners that fail will also cause the terraform apply itself to fail. The `on_failure` setting can be used to change this.
+
+| Values | description|
+| :------: | ---------------------------------------------------------- |
+| continue | ignore the error and continue with creation or destruction |
+| fail     | raise an error and stop applying. If this is a creation provisioner, taint the resource |
+
+An example below
+
+```terraform
+resource "aws_instance" "web" {
+    # ...
+
+    provisioner "local-exec" {
+        command    = "echo the server ip is ${self.private_ip}"
+        on_failure = continue
+}
+```
+
+### Null Resource
+The `null_resource` implements the standard resource lifecycle but takes no further action. The `triggers` argument allows specifying an arbitrary set of values that, when changes, will cause the resource to be replaced.
 
 
 
