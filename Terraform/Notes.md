@@ -139,9 +139,12 @@ Terraform supports the following data types
 | Type    | Description                                            | Example                                |
 | :-----: | ------------------------------------------------------ | -------------------------------------- |
 | string  | sequence of unicode characters representing some text  | "hello"                                |
+| number  | number value                                           | 200                                    |
 |  list   | sequential list of values identifies by their position | ["Rome", "Venice" ]                    |
 |  map    | groups of values identified by named labels            | { "city": "Rome", "country": "Italy" } |
-| number  | number value                                           | 200
+|  set    | unordered muliple values with no duplicates            | { "apple", "banana", "mango"}          |
+
+We can use the function `toset(["a", "b"])` to convert a list of values into a set.
 
 ### Local Values
 Local values are helpful to avoid repeating the same values or expressions multiple times in a configuration. If overused they can also make a configuration hard to read by future maintainers by hiding the actual values used. Use local values in situations where a single value or result is used in many places and that value is likely to be changed in the future.
@@ -237,6 +240,144 @@ dynamic "ingress" {
     }
 }
 ```
+
+The **iterator** argument (optional) sets the name of a temporary variable that represents the current element of the complex value. If omitted, the name of the variable deafults to the label of the dynamic block (e.g. "ingress" in tge example above)
+
+```terraform
+dynamic "ingress" {
+    for_each = var.ingress_ports
+    iterator = port
+    content {
+        from_port = port.value
+        to_port   = port.value
+        protocol    = "TCP"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+}
+```
+
+### Tainted Resources
+Can happen that a resource created with terraform is manually modified by a user, so the configuration in the terraform state does not match no more with the current configuration of such resource. To address this problem we can
+- import the changes to terraform
+- delete and recreate the resource
+
+For the second case we can mark the resource as `tainted`, with the command `terraform taint aws_instance.ec2`. The command will set the resource in the terraform state as tainted adding the property `status="tainted"`, forcing it to be destroyed and recreated on the next apply. 
+
+The command `terraform taint` will not modify the infrastructure, but does modify the state file in order to mark a resource as tainted. Once a resource is marked as tainted, the next plan will show that the resource will be destroyed and recreated and the next apply will implement this change.
+
+Note that tainting a resource may affect resources that depend on the newly tainted resource.
+
+
+### Spalat Expressions
+Spalat expressions allow to get a list of all attributes. Suppose having three iam users created with the `count` parameter and defining as much as output variables as the iam users created. Then we can write
+
+```terraform
+resource "aws_iam_user" "user" {
+    count = 3
+    name  = "iam-user-${count.index}"
+    path  = "system"
+}
+
+output "iam_user_arns" {
+    value = aws_iam_User.user[*].arn
+}
+```
+
+### Terraform Graph
+The `terraform graph` command is used to generate a visual representation of either a configuration or execution plan. The output of terraform graph is in the DOT format, which can be easily be converted to an image.
+
+```bash
+terraform graph > graph.dot
+```
+
+The graphically visualize `graph.dot` we need an external tool, like `graphviz`
+
+
+### Terraform Plan File
+The generated terraform plan can be saved to a specific path. This plan can be used with `terraform apply` to be certain that only the changes shown in this plan are applied.
+
+```bash
+terraform plan -out=path/to/saved_plan
+```
+
+The file is a binary file, so its objective is to save the current plan in order to apply it in a second moment or to not lose it. To apply it just run `terraform apply saved_plan`
+
+### Terraform Output
+The terraform output is used to extract the value of an output variable from the state file
+
+```bash
+terraform output output_value_name 
+```
+
+Alternatively, we can simply inspect the terraform state. 
+
+
+### Terraform Settings
+The `terraform` configuration block type is used to configure some behaviors of Terraform itself, such as requiring a minimum Terraform version to apply the configuration. Terraform settings are gathered together into terraform blocks.
+
+The `required_version` setting accepts a version contraint string, which specifies which versions of terraform can be used. If the running versions of Terraform does not match the constraints specified, Terraform will through an error and exit without taking any further actions. 
+
+```terraform
+terraform {
+    required_version = "> 0.12.0"
+    required_providers {
+        aws = "~>5.0"
+    }
+}
+```
+
+### Challenges with larger infrastructure
+When dealing with large infrastructure, we could face the issue related to API limits provided by the provider. To address this issue we can avoid updating the state of each resource with the flag `-refresh=false`, so the commands would be
+
+```bash
+terraform plan  -refresh=false
+terraform apply -refresh=false
+```
+
+Another approach is to apply the command to a specific target using `terraform plan -target=aws_instance.ec2"`.
+
+Both approaches however are discouraged from terraform: the best practise is to separate the configuration in multiple directories.
+
+
+### Zipmap Function
+The `zipmap` function constructs a map from a list of keys and corresponding list of values. The high level syntax is `zipmap(keyslist, valueslist)`
+
+```
+> zipmap(["a", "b"], [1, 2])
+{
+    "a"=1
+    "b"=2
+}
+```
+
+The `zipmap` function can be very useful when define output values
+
+```terraform
+output "combined" {
+    value = zipmap(aws_iam_user.user[*].name, aws_iam_user.user[*].arn)
+}
+```
+
+### Comments
+To comment terraform code we can use `#` or `//` to comment a single line, for a block we have to use `\* *\` instead.
+
+
+### For Each parameter
+The `for_each` statement makes use of map/set as an index value of the created resource. In such blocks an additional `each` object is available, and it has two attributes
+
+| each object  | description |
+| :----------: | -------------------------------------------- |
+| each.key     | the map value corresponding to this instance |
+
+### Count and For Each meta arguments
+When using `count`, each resource created is assigned to a particular `count.index`, so if this changes, terraform will see it as a different resource. Hence, if the count is based on a list of values and the order of the element changes, terraform will try to recreate all of them. 
+
+In the case of `for_each` instead the meta argument is based on the `each.key`, so this is generally a more reliable approach because the order of the elements does not matter.
+
+In both cases in the state terraform adds in each resource a field `index_key` field where it is a number in case of `count`, instead will be `each.key` if the resource is created with the `for_each` statement.
+
+As a rule of thumb, we use `count` to create resources very similar to each others. In all other cases, generally `for_each` is better.
+
 
 
 
