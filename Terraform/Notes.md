@@ -785,14 +785,54 @@ $ terraform import aws_instance.ec2_instance <instance-id>
 
 This will be populate the `terraform.tfstate` file with the detailed configuration about the ec2 instance imported. Now that the resource is managed by terraform, we can edit or destroy it using the `terraform apply` and `terraform destroy` commands.
 
+## Security Primer
 
+### Deploy on multiple regions and accounts
+If we have a terraform project with resources deployed on multiple accounts or regions we have to add on `providers.tf` another `provider` block
 
+```terraform
+provider "aws" {
+    region = "us-east-1"
+}
 
+provider "aws" {
+    alias   = "provider-2"
+    region  = "ap-south-1"
+    profile = "aws-account-2-profile"
+}
+```
 
+Where the first `provider` will be used on defined resources if not specified otherwise. The `profile` field contains the profiles configured, retrieved running `aws configure list-profiles` command. To use the second provider:
 
+```terraform
+# will be used the "default" provider
+resource "aws_eip" "first_eip"{
+    vpc = "true"
+}
 
+resource "aws_eip" "first_eip"{
+    vpc = "true"
 
+    provider = "provider-2"
+}
+```
 
+### HashiCorp Vault
+**HashiCorp Vault** allows organizations to securely store secrets like tokens and certificates along with access management. It is able to generate secrets like ec2 key pairs or access keys for an iam user, or credentials for a MySQL database.
+
+The Vault provider allows terraform to read from, write to, and configure HashiCorp Vault. 
+
+```terraform
+provider "vault" {
+    address = "http://127.0.0.1:8200
+}
+
+data "vault_generic_secret" "db_credentials" {
+    path = "secret/db-creds"
+}
+```
+
+It's important to notice that secrets won't be encrypted in `terraform.tfstate` file. 
 
 
 
