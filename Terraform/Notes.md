@@ -581,6 +581,219 @@ When using workspaces (after the apply) terraform will create the `terraform.tfs
 The `terraform.tfstate` for the `default` workspace is always in the root folder of the terraform project.
 
 
+## Remote State Managment
+
+### Sensitive data
+Terraform when dealing with sensitive data will mark them as `<sensitive value>` when output them on the console, but these values will be saved in the `terraform.tfstate`.
+For this security reason the `terraform.tfstate` must not be committed if working in a team, but should be saved in a remote configuration.
+
+### Supported Module Sources
+When defining a module, we have to specify the `source` argument, which tells terraform to find the source code.
+The source can be in
+- local path
+- terraform registry
+- GitHub
+- Bitbucket
+- Generic git, Mercurial repository
+- HTTP Url
+- S3 bucket
+- GCS bucket
+
+A local path must begin with either `.` or `..` to indicate that a local path is intended. 
+
+Arbitrary git repositories can be used by prefixing the address with the special `git::` prefix. After it, any valid git URL can be specified to select one of the protocols supported by Git. 
+
+```terraform
+module "vpc" {
+    source = "git::https://example.com/vpc.git
+}
+
+module "storage" {
+    source = "git::ssh://username@example.com/storage.git"
+}
+```
+
+By default, terraform wiull clone and use the default branch (referenced by HEAD) in the selected repository. We can override this using the `ref` argument
+
+```terraform
+module "vpc" {
+    source = "git::https://example.com/vpc.git?ref=v1.2.0"
+}
+```
+
+the value of `ref` argument can be any reference that would be accepted by the git checkout command, including branch and tag names.
+
+### Terraform and .gitignore
+Depending on the environments, it is recommended to avoid committing certain files to git
+
+| Files to ignore     | description |
+| :-----------------: | -------------------- |
+| `.terraform`        | cache directory, recreated with `terraform init`         |
+| `terraform.tfvars`  | likely contains sensitive data like passwords            |
+| `terraform.tfstate` | should be stored not in git repo but in the remote state |
+| `crash.log`         | if terraform crashes, the logs are stored to this file   |
+
+### Terraform Backend
+Backends primarily determine where terraform stores its state. By default, terraform implicitly uses a backend called `local` to store state as a local file on disk.
+
+To make a terraform project able to be handled by a team, we have to store the `terraform.tfstate` in a central backend, instead the code on a central git repository.
+Terraform supports multiple backends that allows remote service related operations. Some of the most popular are
+- s3
+- consul
+- azurerm
+- kubernetes
+- http
+- etcd
+
+Accessing state in a remote service generally requires some kind of access credentials. Some backends act like plain "remote disks" for state files, others instead support
+locking the state while operations are being performed, which helps prevent conflicts and inconsistencies. 
+
+Using `s3` bucket as a backend
+
+```terraform
+terraform {
+    backend "s3" {
+        bucket     = "mybucket"
+        key        = "network/terraform.tfstate"
+        region     = "us-east-1"
+        access_key = "..."    # optional
+        secret_key = "..."    # optional
+     }
+}
+```
+
+It's a common practice to divide the project in multiple terraform projects, where each `terraform.tfstate` is in a different path (e.g. in this configuration was `network/terraform.tfstate`).
+
+
+### State Locking
+Whenever a write operation is performed, terraform would lock the state file, in order to avoid concurrent writes. In particular, when using a local `backend` it creates a temporary file named 
+`.terraform.tfstate.lock.info`, a json file with lock information (e.g. lock id).
+
+State locking happens automatically on all operations that could write state. We won't see any message about it because all of this happens behind the scenes. If state locking fails, terraform stops.
+Note that not all the backends support locking: the documentation for each backend includes details on whether it supports locking or not.
+
+Terraform has a `force-unlock` command to manually unlock the state if unlocking failed. Use it carefully.
+
+### State Locking in S3
+By default, s3 does not support **state locking** functionality: we need to use `DynamoDB` table, in order to store into it the state lock.
+The table must have a partiotion key named `LockID` with type of `String`. The backend configuration will be the following
+
+```terraform
+terraform {
+    backend "s3" {
+        bucket     = "mybucket"
+        key        = "network/terraform.tfstate"
+        region     = "us-east-1"
+
+        dynamodb_table = "terraform-state-locking
+     }
+}
+```
+
+If the lock acquisition fails, we'll get an error message like this
+
+```bash
+$ terraform plan
+Error message: ConditionalCheckFailedException: the conditional request failed
+Lock Info:
+    ID:        <uuid-string>
+    Path:      s3_bucket/network/terraform.tfstate
+    Operation: OperationTypeApply
+    Who:       DESKTOP-LE83JS\Zeal Vora@DESKTOP-LE83JS
+    Version:   1.1.9
+    Created:   <timestamp>
+    Info: 
+```
+
+These information about the lock is the value associated to the LockID key. Hence, in the dynamodbtable will have an entry like this
+
+| LockID                                |  Info                                                 |
+| :-----------------------------------: | ----------------------------------------------------- |
+| s3_bucket/network/terraform.tfstate   | {"ID": "...", "Path": "...", "Operation": "...", ...} |
+
+This is true when a write operation is running. At the end of the operation terraform release the lock and the value associated to the value of the `LockID` will be a digest.
+
+| LockID                                |  Digest                                               |
+| :-----------------------------------: | ----------------------------------------------------- |
+| s3_bucket/network/terraform.tfstate   | <alphanumeric_string> |
+
+### Terraform State Managment
+To manage the terraform state efficiently, terraform offers the following commands. An example is `terraform state list`
+
+| State sub command | description                                              |
+| :---------------: | -------------------------------------------------------- |
+| `list`            | list resources within terraform state                    |
+| `mv`              | moves items within terraform state                       |
+| `pull`            | manually download and output the state from remote state |
+| `push`            | manually upload a local state file to remote state       |
+| `rm`              | remove items from the terraform state                    |
+| `show`            | show the attributes of a single resource in the state    |
+
+Note that the `terraform state rm aws_instance.ec2` remove the resource from the state but does not delete the resource from the actual infrastructure: simply terraform does not track it anymore. 
+
+### Connecting Remote States
+The `terraform_remote_state` data source retrieves the root module output values from some other terraform configuration, using the latest state snapshot from the remote backend.
+
+In other words, `terraform_remote_state` allows us to fetch the output values of a terraform project and use them as input variables for another project without manually fetch them.
+
+```terraform
+data "terraform_remote_state" "vpc" {
+    backend = "s3"
+    # the config block value is the same as the backend configuration
+    config = {
+        bucket = "terraform-state-bucket"
+        key    = "network/terraform.tfstate"
+        region = "us-east-1"
+    }
+}
+
+resource "aws_security_group" "allow_tls" {
+    name = "allow-tls-sg"
+
+    ingress {
+        from_port   = 443
+        to_port     = 443
+        protocol    = "TCP"
+        cidr_blocks = ["${data.terraform_remote_state.eip.outputs.eip_addr}/32"]
+    }
+}
+```
+
+### Terraform Import
+Terraform is able to import existing infrastructure. This allows to take resources created manually to bring them under terraform managment.
+
+The current implementation of terraform import can only import resources into the state, but it does not generate configuration. This means that these files must be created manually, but terraform has announced that in a future release terraform will support this feature. 
+
+Let's assume we want to make terraform managing an ec2 instance created manually. We have to create define the resource manually in a `ec2.tf` file  with a basic configuration
+
+```terraform
+resource "aws_instance" "web" {
+    ami           = "ami-156d64ds86g"
+    instance_type = "t3.micro"
+    key_name      = "ec2-keypair"
+    tags = {
+        Name = "ec2-instance"
+    }
+}
+```
+
+and a `provider` should be defined if it is not. Then we have to run `terraform init` and then run the `terraform import` command
+
+```
+$ terraform import aws_instance.ec2_instance <instance-id>
+```
+
+This will be populate the `terraform.tfstate` file with the detailed configuration about the ec2 instance imported. Now that the resource is managed by terraform, we can edit or destroy it using the `terraform apply` and `terraform destroy` commands.
+
+
+
+
+
+
+
+
+
+
 
 
 
