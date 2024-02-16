@@ -279,7 +279,7 @@ resource "aws_iam_user" "user" {
 }
 
 output "iam_user_arns" {
-    value = aws_iam_User.user[*].arn
+    value = aws_iam_user.user[*].arn
 }
 ```
 
@@ -674,6 +674,10 @@ Note that not all the backends support locking: the documentation for each backe
 
 Terraform has a `force-unlock` command to manually unlock the state if unlocking failed. Use it carefully.
 
+```bash
+$ terraform force-unlock <lock-id>
+```
+
 ### State Locking in S3
 By default, s3 does not support **state locking** functionality: we need to use `DynamoDB` table, in order to store into it the state lock.
 The table must have a partiotion key named `LockID` with type of `String`. The backend configuration will be the following
@@ -833,6 +837,82 @@ data "vault_generic_secret" "db_credentials" {
 ```
 
 It's important to notice that secrets won't be encrypted in `terraform.tfstate` file. 
+
+
+## Terraform Cloud
+Terraform Cloud manages terraform runs in a consistent and reliable environment with various features like access controls, private registry for sharing modules, policy controls and others.
+
+### Workspace
+We can set one or more workflows, having as source a version control system like GitHub, GitLab, Bitbucket or Azure DevOps. The workflow can run commands like `terraform plan` or `terraform apply`, and the last one can require a manual approve after examining the desired state.
+To run such commands however we need to set workspace variables, like aws access keys. 
+
+### Workspace Sentinels
+We can associate sentinels set policies to workspace. A sentinel policy is a rule that checks if resources that are going to be deployed satisfy such constraints. Rules depends on which provider the resources belong to.
+
+An example of sentinel policy checks if a resource has a tag or not. We can set one of the following to the sentinel policy:
+- `hard-mandatory`, cannot ovveride
+- `soft-mandatory`, can ovveride
+- `advisory`, logging only
+
+Sentinels do not prevent to manual changes from the console. Sentinels are a paid feature.
+
+### Backend Operations Types
+The remote backend stores terraform state and may be used to run operations in the terraform cloud.
+Terraform cloud can also be used with localo operations, in which case only state is stored in the terraform cloud backend
+
+When using full remote operations (e.g. `terraform plan`) can be executed in terraform cloud's run environment, with log output streaming to the local terminal. 
+The output shown in the local terminal will be the same as the one shown if the command was run in the cloud. 
+
+In the `providers.tf` we have to set the backend as `remote`
+```terraform
+terraform {
+    required_version = "~> 0.12.0"
+
+    backend "remote" {}
+}
+```
+
+And we have to create `backend.hcl` file
+
+```hcl
+workspaces { name = "demo-workspace" }
+hostname     = "app.terraform.io"
+organization = "my-demo-organization"
+```
+
+It is needed to have a token to connect to the terraform cloud: to get it run `terraform login`. It will ask to open the browser to a specific link, copied the token it provides and paste into the terminal. 
+Only after logging in we can run `terraform init`. 
+
+Notice that if the workspace is connected to a VCS - Version Control System we cannot run the commands from the terminal because we will have two repositories (the local and the remote),
+so two source of truth. Hence, if we want to run the terraform commands form the local terminal is suggested to not use the **version control workflow** but to use the `CLI-driven workflow instead. 
+
+#### Remote Backend Configuration - deep dive
+The reccomended way to set the remote configuration is 
+
+```terraform
+terraform {
+    cloud {
+        organization = "demo-organization"
+
+        workspaces {
+            name = "cli-driven-workspace
+        }
+    }
+}
+``` 
+
+### Understanding Concept of Air Gap
+An air gap is a network security measure employed to ensure that a secure computer network is physically isolated from unsecured networks, such as the public internet.
+
+Terraform Enterprise installs using either an online or air gapped method. The first method requires an internet connectivity, the secondo doesn't.
+
+
+
+
+
+
+
+
 
 
 
