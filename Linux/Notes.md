@@ -120,7 +120,7 @@ $ ssh-keygen -t rsa # interactive rsa keys generation
 The SSH agent is a background process that manages ssh keys. To add a private key to the agent, run
 
 ``` bash 
-$ ssh-agent                   # start ssh agent
+$ ssh-agent                   # start ssh agent (works also for windows)
 $ ssh-add path/to/private_key # add a private key to the agent
 $ ssh-add -l                  # lists the keys currently loaded in the agent
 $ ssh-add -D                  # removes all the keys from the agent
