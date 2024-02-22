@@ -172,6 +172,164 @@ we see there are two shards because one is the replica, indicated with `r`, and 
 Elasticsearch supports taking snapshots as backups and they can be used to restore to a given point in time. Snapshots can be taken at thge index level or for the entire cluster. They use snapshots for backups, and replication for high availability and performance. 
 
 
+## Managing Documents
+
+To create and delete an index
+
+```
+# delete the index 'pages'
+DELETE /pages
+
+# creates the index 'products' with custom settings
+PUT /products
+{
+    "settings": {
+        "number_of_shards": 2,
+        "number_of_replicas": 2
+    }
+}
+```
+
+To create a document (just needs to be a valid json object) and add it to an index
+
+```
+POST /products/_doc
+{
+    "name": "Coffee Maker",
+    "price": 65
+}
+
+# if we want to create a doc with _id to 100
+PUT /products/_doc/100
+{
+    "name": "Coffee Maker",
+    "price": 65
+}
+
+# to retrieve a document
+GET /products/_doc/<id>
+```
+
+The document retrieved with the `GET` request is in the response under the `_source` field.
+
+We can change the value `action.auto_create_index` if we want to create the index automatically if it does not exist or if we want to make elasticsearch throwing an error.
+
+To update a document
+
+```
+# to change an existing value...
+POST /products/_update/100
+{
+    "doc": {
+        "price": 66
+    }
+}
+
+# ...or to add a field
+POST /products/_doc/100
+{
+    "doc": {
+        "tags": ["electronics"]
+    }
+}
+```
+
+### Documents are immutable
+Documents are immutable: when updating them, elasticsearch simply replace the document with a new one. In particular, elasticsearch performs the following steps:
+
+- retrieve the current document
+- changes the fields values
+- replace the previous document with the new one
+
+we could do this by ourselves, but we would have added network traffic. 
+
+### Scripted Updates
+Elasticsearch allows to change documents values by referencing them (e.g. increase a counter by two). We use the `update` api, specifying a script object in the request body.
+
+```
+# decrease the price by 1
+POST /products/_update/<doc_id>
+{
+    "script": {
+        "source": "ctx._source.price--"
+    }
+}
+```
+
+```
+# set the price to 10
+POST /products/_update/<doc_id>
+{
+    "script": {
+        "source": "ctx._source.price = 10"
+    }
+}
+```
+
+We can also set parameters to be used in the script by specifying the `params` field in the `script` object, that is a map of key values pairs
+```
+POST /products/_update/<doc_id>
+{
+    "script": {
+        "params": {
+            "quantity": 4
+        }
+        "source": "ctx._source.price -= params.quantity"
+    }
+}
+```
+
+where `ctx` is a variable that stands for *context*. 
+
+When running an update, in the response there is the field `result` that is `updated` if the document was updated successfully. A possible value however is `noop` (i.e. *no operation*), that happens for example when we try to update a field value with the existing value. This is however not the case with scripted updates, where `result` will always be `updated`, even if no field values actually changes.
+We can change this behavior if we set the operation within the script. For example, we can write a script that modify a document based on a condition
+
+```
+# set price to 10 only if the price is not 20
+POST /products/_update/100
+{
+    "script": {
+        "source": """
+        if (ctx._source.price == 20) {
+            ctx.op = 'noop';
+        }
+        ctx._source.price = 10;
+        """
+    }
+}
+```
+
+to run a complicated script, just use triple quotes `"""`. The response will contain `result` to `noop`. 
+
+If we run the following script instead, we always get in the response `result` to `updated`
+
+```
+POST /products/_update/100
+{
+    "script": {
+        "source": """
+        if (ctx._source.in_stock > 0) {
+            ctx._source.in_stock--;
+        }
+        """
+    }
+}
+```
+
+Altough not used so much, we can delete a document setting `ctx.op` to `delete`. In the response will be `result` to `deleted`
+
+```
+POST /products/_update/100
+{
+    "script": {
+        "source": """
+        if (ctx._source.in_stock <= 1) {
+            ctx.op == "delete"
+        }
+        ctx._source.in_stock--;
+    }
+}
+```
 
 
 
