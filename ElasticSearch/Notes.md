@@ -80,14 +80,14 @@ Documents are just json files, that will be stored along with some metadata
     "_version": 1,
     "_seq_no": 0,
     "_primary_term": 1,
-    "_source": "{
+    "_source": {
         "name": "Andersen",
         "country": "Denmark"
     }
 }
 ```
 
-Every document is stored in an `index`. Documents belonging to an index should share common semantic characteristics.
+Every document is stored in an `index`. Documents belonging to an index should be logically related.
 
 ### Inspecting the Cluster
 To inspect the cluster we use the rest apis. The most common verbs used are `GET`, `PUT`, `POST` and `DELETE`. 
@@ -97,7 +97,7 @@ An example request is
 
 ```
 GET /_cluster/health
-GET /_cat/nodes?v
+GET /_cat/nodes?v  # v stands for verbose
 GET /_cat/indices?v&expand_wildcards=all
 ```
 
@@ -114,16 +114,16 @@ All the queries we can run them with postman or curl
 ```
 
 ### Sharding and scalability
-In elasticseach, sharding is the mechanism to divide indicies into smaller pieces, that can be put on one or multiple machines. Each piece is called `shard`, and the main purpose is to horizontally scale the data volume. 
+In elasticseach, sharding is the mechanism to divide indexes into smaller pieces, that can be put on one or multiple machines. Each piece is called `shard`, and the main purpose is to horizontally scale the data volume. 
 
-Although it is an approximation, a `shard` is an independent index and it is in particular an Apache Lucene `index`. Moreover, an elasticsearch index consists in one or more Apache Lucene indeces. A shard has no predefined size; it grows as documents are added to it and may store up to about two billion documents. With sharding we can improve a lot the performance, because of the parallelization of queries on multiple nodes increase the throughput of an index. 
+A `shard` is technically an **Apache Lucene Index**, and it can be thoughy as an independent index. Moreover, an elasticsearch index consists in one or more Apache Lucene indeces. A shard has no predefined size; it grows as documents are added to it and may store up to about two billion documents. With sharding we can improve a lot the performance, because of the parallelization of queries on multiple nodes increase the throughput of an index. 
 
 By default, now an index contains a single shard but up to version 7.0.0 an index was created with 5 shards, leading to _over-sharding_. We can increase the number of shards with `split` api or reduce it with `shrink` api.
 
 ### Replication
-In elasticsearch, replication is supported natively and enabled by default. Replication is configured at the index level and it works by creating copies of shards, referred to as `replica shards`. A shard that has been replicated is called a `primary shard`. A primary shard and its replica shards are referred to as a `replication group`. 
+In elasticsearch, replication is supported natively and enabled by default. Replication is configured at the index level and it works by creating copies of shards, referred to as `replica shards`. A shard that has been replicated is called `primary shard`. <u>A primary shard and its replica shards are referred to as a `replication group` </u>. 
 
-Replica shards are a complete copy of a shard, and a replica shard can serve search requests, exactly like its primary shard. The number of replicas can be configured at index creation. Of course, replicas are stored on a different nodes in respect of the primary shard. 
+Replica shards are a complete copy of a shard, and a replica shard can serve search requests, exactly like its primary shard. The number of replicas can be configured at index creation. Of course, replicas are stored on a different nodes in respect of the primary shard to handle resilience.
 
 We can increase a lot the query throughput with replication: replica shards of a replication group can serve different search requests simultaneously, increasing the number of requests that can be handled at the same time. Elasticsearch intelligently routes requests the best shard, and cpu parallelization improves performance if multiple replica shards are stored on the same node. 
 
@@ -143,44 +143,49 @@ If we run the `_cat` operation with `v` for verbose
 
 ```
 GET /_cat/indices?v
+```
 
 | health | status | index                | pri   | rep   | ... |
 | :----: | :---:  | :------------------: | :---: | :---: | --- |
-| green  | open   | .kibana_task_manager | 1     | 0     | ... |
 | yellow | open   | pages                | 1     | 1     | ... |
+| green  | open   | .kibana_task_manager | 1     | 0     | ... |
 | green  | open   | .kibana_1            | 1     | 0     | ... |
-```
 
-If we have a cluster with only a node the status of the index will remain `yellow`, because the replica it is defined but not created, because a replica and its shard are always allocated on different nodes. Note also that replicas set for the kibana indeces are configured with one shard and zero replicas. However, if we add another node on the cluster, the `rep` will increase of one. This is because the kibana indeces are configured with a parameter called `auto_expand_replicas`, with a value from 0 to 1 that allow to dynamically changes the number of replicas depending on how many nodes the cluster has. 
+If we have a cluster with only a node the status of the index will remain `yellow`, because the replica it is defined but not created, because a replica and its shard are always allocated on different nodes. Note also that replicas set for the kibana indeces are configured with one shard and zero replicas. However, if we add another node on the cluster, the `rep` will increase of one. This is because the kibana indeces are configured with a parameter called `auto_expand_replicas`, with a value from `0` to `1` that allows to dynamically changing the number of replicas depending on how many nodes the cluster has. 
 
 To confirm that, we can inspect the shards 
 
 ```
 GET /_cat/shards?v
+```
 
 | index                 | shard  | prirep   | state      | node    | ... |
 | :-------------------: | :---:  | :------: | :--------: | :-----: | --- |
-| pages                 |    0   |    p     | STARTED    | <node>  | ... |
-| pages                 |    0   |    r     | UNASSIGNED | <node>  | ... |
-| .kibana_task_manager  |    0   |    p     | STARTED    | <node>  | ... |
-| .kibana_1             |    0   |    p     | STARTED    | <node>  | ... |
-```
+| pages                 |    0   |    p     | STARTED    | _node_  | ... |
+| pages                 |    0   |    r     | UNASSIGNED | _node_  | ... |
+| .kibana_task_manager  |    0   |    p     | STARTED    | _node_  | ... |
+| .kibana_1             |    0   |    p     | STARTED    | _node_  | ... |
 
 we see there are two shards because one is the replica, indicated with `r`, and one is the primary shard, `p`. 
 
 ### Snapshot
-Elasticsearch supports taking snapshots as backups and they can be used to restore to a given point in time. Snapshots can be taken at thge index level or for the entire cluster. They use snapshots for backups, and replication for high availability and performance. 
+Elasticsearch supports taking snapshots as backups and they can be used to restore to a given point in time. Snapshots can be taken at the index level or for the entire cluster. They use snapshots for backups, and replication for high availability and performance. 
 
 
 ## Managing Documents
 
-To create and delete an index
+
+### Create and delete and index
+
+To delete an index called "pages"
 
 ```
-# delete the index 'pages'
 DELETE /pages
+```
 
-# creates the index 'products' with custom settings
+To create an index "products" with custom settings
+
+```
 PUT /products
 {
     "settings": {
@@ -190,6 +195,7 @@ PUT /products
 }
 ```
 
+### Create a documment
 To create a document (just needs to be a valid json object) and add it to an index
 
 ```
@@ -198,15 +204,19 @@ POST /products/_doc
     "name": "Coffee Maker",
     "price": 65
 }
+```
 
-# if we want to create a doc with _id to 100
+If we want to create a doc with _id to 100
+```
 PUT /products/_doc/100
 {
     "name": "Coffee Maker",
     "price": 65
 }
+```
 
-# to retrieve a document
+To retrieve a document
+```
 GET /products/_doc/<id>
 ```
 
@@ -214,18 +224,19 @@ The document retrieved with the `GET` request is in the response under the `_sou
 
 We can change the value `action.auto_create_index` if we want to create the index automatically if it does not exist or if we want to make elasticsearch throwing an error.
 
-To update a document
+To update a field of a document
 
-```
-# to change an existing value...
+```json
 POST /products/_update/100
 {
     "doc": {
         "price": 66
     }
 }
+```
 
-# ...or to add a field
+To add a new field 
+```json
 POST /products/_doc/100
 {
     "doc": {
@@ -234,8 +245,8 @@ POST /products/_doc/100
 }
 ```
 
-### Documents are immutable
-Documents are immutable: when updating them, elasticsearch simply replace the document with a new one. In particular, elasticsearch performs the following steps:
+### Documents Immutability
+Documents are **immutable**: when updating them, elasticsearch simply replace the document with a new one. In particular, elasticsearch performs the following steps:
 
 - retrieve the current document
 - changes the fields values
@@ -246,8 +257,8 @@ we could do this by ourselves, but we would have added network traffic.
 ### Scripted Updates
 Elasticsearch allows to change documents values by referencing them (e.g. increase a counter by two). We use the `update` api, specifying a script object in the request body.
 
+Decrease the price field by one of the document having id 100
 ```
-# decrease the price by 1
 POST /products/_update/<doc_id>
 {
     "script": {
@@ -256,8 +267,8 @@ POST /products/_update/<doc_id>
 }
 ```
 
+To set the price to 10
 ```
-# set the price to 10
 POST /products/_update/<doc_id>
 {
     "script": {
@@ -281,7 +292,7 @@ POST /products/_update/<doc_id>
 
 where `ctx` is a variable that stands for *context*. 
 
-When running an update, in the response there is the field `result` that is `updated` if the document was updated successfully. A possible value however is `noop` (i.e. *no operation*), that happens for example when we try to update a field value with the existing value. This is however not the case with scripted updates, where `result` will always be `updated`, even if no field values actually changes.
+When running an update, in the response there is the field `result` that is `updated` if the document was updated successfully. A possible value however is `noop` (a.k.a. *no operation*), that happens for example when we try to update a field value with the existing value. This is however not the case with scripted updates, where `result` will always be `updated`, even if no field values actually changes.
 We can change this behavior if we set the operation within the script. For example, we can write a script that modify a document based on a condition
 
 ```
@@ -290,10 +301,10 @@ POST /products/_update/100
 {
     "script": {
         "source": """
-        if (ctx._source.price == 20) {
-            ctx.op = 'noop';
-        }
-        ctx._source.price = 10;
+            if (ctx._source.price == 20) {
+                ctx.op = 'noop';
+            }
+            ctx._source.price = 10;
         """
     }
 }
