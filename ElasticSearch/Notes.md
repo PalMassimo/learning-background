@@ -437,6 +437,64 @@ POST /products/_delete_by_query
     }
 ```
 
+### Batch Processing
+With `bulk` apis we can index, update or delete multiple document at a time. We can do this processing individual requests in batches, specifically by using the bulk api. The **bulk** api expects data formatted using the NDJSON specification. This API accepts a number of lines, each separated by a newline character, being either `\n` or `\r\n`
+
+In the request we can specify one of the following requests: `index`, `create`, `update` or `delete`. 
+
+In the following request the `_id` is optional, if not specified elasticsearch will create one. Although similar, `index` and `create` operations differs because the first if the document exist it replace it, the second would fail instead. 
+
+```
+POST /_bulk
+{ "index": { "_index":  "products", "_id": 200} }           # define the operation
+{ "name": "espresso machine", "price": 199, "in_stock": 5 } # define the document
+{ "create": { "_index":  "products", "_id": 201} }          # define the operation
+{ "name": "milk frother", "price": 149, "in_stock": 15 }    # define the document
+```
+
+In the `items` response field for each of action we find the corresponding result.
+
+To update with `bulk` api (we can add a complicated script)
+
+```
+POST /_bulk
+{ "update": { "_index": "products", "_id": 201 } }
+{ "doc": { "price": 129 } }
+{ "delete": { "_index": "products", "_id": 200 } }
+```
+
+To avoid typing everytime the index in which we want to perform the operations we can specify it in the path
+```
+POST /products/_bulk
+{ "update": { "_id": 201 } }
+{ "doc": { "price": 129 } }
+{ "delete": { "_id": 200 } }
+```
+
+Note that the http `Content-Type` header should be set as `Content-Type: application/x-ndjson`, even if `Content-Type: application/json` would be accepted. 
+Moreover, each line must end with a newline character `\n` or `\r\n`: this includes the last line. Hence, in a text editor the last line should be empty. 
+Finally, a failed action will not affect other actions: neither will the bulk request as a whole be aborted. This is one of the reason why the bulk api returns detailed information about each action. The order of the entries in the `items` key is the same in which the actions were specified in the request. 
+
+The bulk api supports optimistic concurrency control: we can include the `if_primary_term` and `if_seq_no` parameters within the action metadata
+
+### Importing data with cURL
+If the bulk request body is very long, it is convenient to write it down to a file (e.g. `products-bulk.json`) and read from it using a tool like `cURL`. The request would be similar to the following
+
+```
+curl -H "Content-Type: application/x-ndjson" -XPOST http://localhost:9200/products/_bulk --data-binary "@products-bulk.json"
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
