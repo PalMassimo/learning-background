@@ -484,6 +484,56 @@ If the bulk request body is very long, it is convenient to write it down to a fi
 curl -H "Content-Type: application/x-ndjson" -XPOST http://localhost:9200/products/_bulk --data-binary "@products-bulk.json"
 ```
 
+### Mapping and Analysis
+
+### Analysis
+Also known in this context as _text analysis_, is applicable only to text fields/values, which are analyzed when indexing documents. Therefore, everytime a document is created it goes through an analysis process. The objective is to store in data structures that are efficient for searching. When elasticsearch performs search queries, it does not use the field values stored in `_source` field. 
+
+When a text value is indexed, a so called `analyzer` is used to process the text, i.e. the value is analyzed. An analyzer consist of three building blocks: character filters, a tokenizer and token filters. The result of analyzing text values is then stored inn a searchable data structure.
+
+**Character Filters** add, remove or change characters. An analyzer can have zero or more character filters, and they are applied in the same order in which they are specified.
+
+An analyzer contains one **tokenizer**, which is used to split strings in token. Caracters may be stripped as part of the tokenization. For example: `"I REALLY like beer!" -> ["I", "REALLY", "like", "beer"]`.
+
+**Token filters** receive the output of the tokenizer as input (i.e. the tokens). A token filter can add, remove or modify tokens. As with character filters, an analyzer may contain zero or more token filters, and they are applied in the same order in which they are specified. One example of token filter is the lowercase filter: `["I", "REALLY", "like", "beer"] -> ["i", "really", "like", "beer"]`.
+
+Elasticsearch ships with a number of built-in character filters, tokenizers and token filters. It is possible to mix and match these together to form custom analyzers. 
+
+The **standard analyzer** is the one used by default and consists of zero character filters, the standard tokenizer which basically removes punctuation and split the strings in tokens based on the whitespace ` ` and the lowercase token filter which simply turn all uppercase letters in lowercase.
+
+### Analyze API
+
+We can use the `analyze` api to test the standard analyzer running the following query, but we can specify a different analyzer in the `analyzer` field
+
+```
+POST /_analyze
+{
+    "text": "2 guys walk into a bar"
+    "analyzer": "standard"
+}
+```
+
+We can run the test specifying the individual components of the analyzer. Let's start with the character filters: since there are not in the standard analyzer, the query must have an empty array as `char_filter` or omit the field entirely.
+
+```
+POST /_analyze
+{
+    "text": "2 guys walk into a bar",
+    "char_filter": [],
+    "tokenizer": "standard"
+}
+```
+
+In this way we can specify other components to build another analyzer and test the results.
+
+
+
+
+
+
+
+
+
 
 
 
