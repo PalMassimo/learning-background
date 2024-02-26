@@ -342,7 +342,100 @@ POST /products/_update/100
 }
 ```
 
+### Routing
+To improve performance, elasticsearch knows in which shard a document is stored using the formula
 
+```
+shard_numnber = hash(_routing) % number_of_primary_shards
+```
+
+where `_routing` is by default the `_id`, but another strategy can be used. In the second case, when retrieving a document, elasticsearch returns the `_routing` document value, otherwise the parameter is omitted.
+
+Because of the formula, when changing the number of shards, elasticsearch needs to re-index all documents and replace the index with a new one, otherwise it will be unable to find the document given an `_id` because it could happen that it search the document in the wrong shard. 
+
+The routing strategy helps to equally distribute documents across shards. 
+
+
+### How Elasticsearch reads and writes data
+When a get document by id request is made, the node that handles the request is called `coordinating node`. By using the routing strategy, the coordinating node will find the replication group (i.e. the primary shard and its replicas) and to choose to which shard run the query elasticsearch uses a technique called `Adaptive Replica Selection` - `ARS`. This technique allows to understand which is the best shard to run the query. 
+
+When a write request is made, again the node that handles the request is called the `coordinating node`. The coordinating node identifies the replication group holding the document and it does not update on every shard at the same time, but instead it performs the update on the primary shard, that is responsible to validate the request. The primary shard then performs the write operation locally, before forwarding it to the replica shards in parallel. Note that the operation will succeed even if the operation cannot be replicated to the replica shards. 
+
+Let's assume we have a replication group with a primary shard and two replicas. It could happen that the update request reaches one replica but not the other one because of an hardware failure on the node holding the primary shard. This bring to a disalignment across shards. To handle such scenarios, elasticsearch uses two parameters: **primary term** and **sequence number**, or `_primary_term` and `_seq_no`. 
+
+Primary terms are a way for elasticsearch to distinguish between old and new primary shards by increase `_primary_term` when the primary shard of a replication group has changed. Hence, primary term is essentially a count for how many times the primary shard has changed. The primary term is appended to write operations. Therefore, in the example the primary term for the replication group would be increased by on because the primary shard failed and one of the replica shards was promoted to be the next primary shard. The primary terms for all replication groups are persisted in the cluster's state. This enables the replica shards to tell whether or not the primary shard has changed since the operation was forwarded.
+
+The sequence number is essentially just a counter that is incremented for each operation, at least until the primary shard changes. The primary shard is responsible for increasing this number when it processes a write request. In this way, sequence numbers enable elasticsearch to know in which order operations happened on a given primary shard. 
+
+Together, primary terms and sequence numbers allow elasticsearch to recover from a primary shard failure (e.g. network error) because they enable elasticsearch to more efficiently figure out which write operations need to be applied. However, for large indices, this process is really expensive: to speed things up, elasticsearch uses **checkpoints**. 
+
+Checkpoints can be global or local, and are essentially sequence numbers. Each replication group has a global checkpoint, instead each replica shard has a local checkpoint. Global checkpoints is the sequence number that all active shards within a replication group have been aligned at least up to. That is, any operation containing a sequence number lower that the global checkpoint have already been performed on all shards within the replication group. If a primary shard fails and rejoins the cluster at a later point, elasticsearch only needs to compare the operations that are above the global checkpoint that is last knew about. Likewise, if a replica shard fails, only the operations that have a sequence number higher than its local checkpoint need to be applied when it comes back. This essentially means that to recover, elasticsearch only needs to compare the operations that happened when the shard is gone, instead of the entire history of the replication group.  
+
+
+### Document Versioning
+Elasticsearch supports versioning with the `_version` metadata field associated to each document. However, this type of versioning does not allow to retrieve an old version of a document, but only allows to keep track of how many times a document has been changed. The value is an integer and starts at 1. It is incremented by one when modifying a document. When deleting a document, the version number is retained for 60 seconds: if in this interval of time another document with the same id is created, then the document will have the same document id incremented by one. This behavior can be configured changing the `index.gc_deletes` setting. 
+
+This type of versioning, that is the default one, is called **internal versioning**. Elasticsearch supports also the **external versioning**, that is useful when versions are maintained outside of elasticsearch such as within a database. For example, when we use a relational database as the primary data store and index data into elasticsearch to make it searchable. To use external versioning, we specify both the elasticsearch version as well as the version type.
+
+```
+PUT /products/_doc/123?version=521&version_type=external
+{
+    "name": "coffee maker",
+    "price": 64,
+    "in_stock": 10
+}
+```
+
+The point of this type of versioning is just to tell how many times a document has been modified. It was used to do optimistic concurrency control, but better mechanisms are used now and this approach is now obsolete. 
+
+
+### Optimistic Concurrency Control
+Optimistic concurrency control prevent overwriting documents inadvertently due to concurrent operations.
+
+In the old way we used to use the `_version` parameter, in the sense that the requests contained the `_version` of the document. If two requests sent an update request, the second would have failed because the `_version` wouldn't match (because the first had updated the `_version` of the document). 
+
+In the new approach, instead of sending along the request the `_version` parameter, `_primary_term` and `_seq_no` are included. In particular, we add the `if_primary_term` and `if_seq_no` in the query parameters.
+
+```
+POST /products/_update/100?if_primary_term=1&if_seq_no=71
+```
+
+ What to do in the case in which the update fails is demanded to the application logic which called elasticsearch.
+
+
+### Update by query
+To update by query we use the `_update_by_query` operation. In the following example, we run the script on every document 
+
+```
+POST /products/_update_by_query
+{
+    "script": {
+        "source": "ctx._source.in_stock--"
+    },
+    "query": {
+        "match_all": {}
+    }
+```
+
+The query creates a snapshot to do optimistic concurrency control. Once the snapshot is taken, a search query is sent to each of the index's shards, in order to find all of the documents that match the supplied query. Whenever a search query matches any documents, a bulk request is sent to update those documents. A bulk operation basically allows to update multiple documents with a single request. Th `batches` key with the results specifies how many batches were used to retrieve the documents.The query uses the `scroll` api internally, which is a way to scroll through result sets. The point of doing this is to be able to handle queries that may match thousand of documents. 
+
+Each pair of search and bulk requests are sent sequentially, that is one at a time. If an error occures while performing either the search query or the bulk query, elasticsearch will retry up to ten times. The number of retries is specified within the `retries` key, for both the search and the bulk queries. If the query is still not successful, the whole query is aborted. The failures will then be specified in the results, within the `failures` key. **Even if the query is aborted, there is no roll back operation**: so even if the update query is aborted and some documents have been updated, they are not rolled back. 
+
+The reason why elasticsearch takes a snapshot of the index is to ensure that the updates are performed on the basis of the current state of the index. For an index where documents are indexed, modified and deleted frequently it is not unlikely that something has changed from when elasticsearch received the query, to when it finishes processing it. 
+
+If a document has been modified since taking the snapshot, the query is aborted: this is checked with the document's primary term and sequence number. To count version confilicts instead of aborting the query, the `conflicts` option can be set to `proceed`. The `conflict` parameter can be set inside the body of the request or as a query parameter. 
+
+
+### Delete by query
+The delete by query api is similar to the update query api. In the following example, the query deletes all documents in the index `products`. Delete by query works in the same exact way as the update by query: we can set `conflicts` to `proceed` if we want to ignore conflicts. 
+
+```
+POST /products/_delete_by_query
+{
+    "query": {
+        "match_all": {}
+    }
+```
 
 
 
