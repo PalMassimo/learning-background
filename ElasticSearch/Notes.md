@@ -527,18 +527,174 @@ POST /_analyze
 In this way we can specify other components to build another analyzer and test the results.
 
 
+### Inverted Indices
+A couple of different data structures are used to store field values. The data structure that is used for a field depends on its data type. Are used more than one data structure to ensure efficient data retrieval for different access patterns. Actually, these data structures are all handled by Apache Lucene.
+
+One of these data structure is **inverted index**, a data structure which is basically a mapping between terms and which docuemnts contain them; where `term` is one token that is emitted by the analyzer. This mean that we have as many inverted index as the tokens. Given the two documents, we have two inverted indices
+
+``` json
+
+{
+    "name": "coffee maker",
+    "description": "makes coffee super fast!",
+    "price": 64
+}
+
+{
+    "name": "toaster",
+    "description": "makes delicious toasts",
+    "price": 49
+}
+
+```
+
+Inverted index for `name` field
+
+| term   | document #1 | document #2 |
+| :----: | :---------: | :---------: |
+| coffee |    x        |      x      |
+| maker  |     x       |      x      |
+
+Inverted index for description field 
+
+| term   | document #1 | document #2 |
+| :----: | :---------: | :---------: |
+| coffee |    x        |      x      |
+| maker  |     x       |      x      |
 
 
 
 
+What makes an inverted index so powerful is how efficient it is to look up a term and find the documents in which the term appears. Hence, if we perform a search for the term `duck`, an inverted index allows us to find in which documents such term is contained. 
+
+An inverted index is something more; it contains more information, such as data that is used for **relevance scoring**. 
+
+Moreover, inverted indexes are built for text fields only, because other data types use different data structures. For instance, `numeric`, `date` and `geospatial` fields are all stored as BKD trees, because this data structure is very efficient for geospatial and numeric range queries. Dates are included because dates are actually stored as long values internally.
 
 
+### Introduction to Mapping
+
+Mapping defines the structure of documents and how they are indexed and stored. This includes the fields of a document and their data types. As simplification, we can think of it as the equivalent of a table schema in a relational database. 
+
+In elasticsearch exist two basic approeaches to mapping: **explicit mapping** and **dynamic mapping**. With explitic mapping we defined field mappings ourselves, tipically when creating an index. With **dynamic mapping**, a field mapping will automatically be created when elasticsearch ecounters a new field: elasticsearch inspect its value to infer its data type. Explicit and dynamic mapping can be combined together. 
 
 
+### Data Types
+Elasticsearch has many data types, the most common are 
+- object
+- integer
+- long
+- text
+- short
+- date
+- float
+- boolean
+- double
 
+#### object and nested data types
+The `object` data type basically covers any json object. Each indexed document may contain a field with an object as its value. 
+A field mapped as object has a field `properties` which is actually a mapping parameter
 
+```
+{
+  "name": "coffee maker",
+  "price": 64.2,
+  "in_stock": "10",
+  "is_active": true, 
+  "manufacturer": {
+    "name": "nespresso",
+    "country": "switzerland"
+  }
+}
 
+{
+  "mappings": {
+    "properties": {
+      "name": { "type": "text" },
+      "price": { "type": "double" },
+      "in_stock": { "type": "short" },
+      "is_active": { "type": "boolean" },
+      "manufacturer": {
+        "properties": {
+          "name": { "type": "text" },
+          "country": { "type": "text" }
+        }
+      }
+    }
+  }
+}
+```
 
+Elasticsearch is built on top of Apache Lucene, which does not support objects; that's why elasticsearchtransforms inner objects to a format that is compatible, as part of indexing operations. Internally, objects are flattened: each level in the hierarchy is denoted with a `.`, such that there are no longer any objects, but the hierarchy is still maintained. 
+
+{
+  "name": "coffee maker",
+  "price": 64.2,
+  "in_stock": "10",
+  "is_active": true, 
+  "manufacturer.name": "nespresso",
+  "manufacturer.country": "switzerland"
+}
+
+Let's assume we want to index an object having an array as a field. The items of the array will be flattened, resulting in field names duplicates. The values are grouped by field name and indexed as an array
+
+```
+{
+  "name": "coffee maker",
+  "reviews": [
+    {
+      "rating": 5.0,
+      "author": "average Joe",
+      "description": "haven't slept for days... amazing!"
+    },
+    {
+      "rating": 3.5,
+      "author": "John Doe",
+      "description": "could be better :)"
+    }
+  ]
+}
+```
+
+```
+{
+    "name": "coffee maker",
+    "reviews.rating": [5.0, 3.5],
+    "reviews.description": ["haven't slept for days... amazing!", "could be better :)"]
+}
+```
+
+If you run a search query against one of the fields, it will search through all of the values within the array. This can be troublesome in some situations: suppose we want to run the following query
+
+```
+MATCH products WHERE reviews.author == "John Doe" AND reviews.rating >= 4.0
+```
+
+The query result will contains the product named "coffee maker", because the field values wew all mixed together when the document was indexed, so the relationship between the object keys was lost. Therefore, elasticsearch does not know that there is a relationship between "John Doe" and 3.5. Effectively, we have returned an object that has a revuew wrutte by John Doe or with a rating of at least 4: the `AND` condition was turned to an `OR` condition.
+
+Obviously we want to not have this behavior. To solve this, there is a data type called `nested`, which is a specilized version of the `object` data type. Its purpose is to maintain the relationship between object values whan an array of objects is indexed. Using this data type enables us to query objects independently, meaning that the object values are not mixed together as you saw a moment ago. To utilize this data type, we must use a specific query, which you will see later in the course.
+
+Let's see an example of the `nested` data type. The data type is simply set to `nested` in the same way as for other data types.
+In this way, the result of the previous query would be correct, but we have to use a different syntax. In particular, we have to use the `nested query`
+
+```
+PUT /products
+{
+    "mappings": {
+        "properties": {
+            "name": { "type": "text"},
+            "reviews": { "type": "nested"}
+        }
+    }
+}
+```
+
+Since Apache Lucene index cannot store object, inner objects are stored as documents would be. They do not show in result queries unless we query them directly. Therefore, if we index a document having ten reviews, each review will be a nested object. This would cause eleven documents to be indexed into Lucene; one for the product and one for each review. 
+
+#### keyword and text data types
+The `keyword` data type should be used for fields on which we want to search for exact values. Since only exact searching is supported, this data type is used for filtering, sorting and aggregating documents. One use case is for the enum values. 
+
+On the other side, we have to use the `text` data type instead if we do not want exact matches.
 
 
 
