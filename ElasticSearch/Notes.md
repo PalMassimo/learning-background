@@ -550,17 +550,22 @@ One of these data structure is **inverted index**, a data structure which is bas
 
 Inverted index for `name` field
 
-| term   | document #1 | document #2 |
-| :----: | :---------: | :---------: |
-| coffee |    x        |      x      |
-| maker  |     x       |      x      |
+| term    | document #1 | document #2 |
+| :-----: | :---------: | :---------: |
+| coffee  |     x       |             |
+| maker   |     x       |             |
+| toaster |             |      x      |
 
 Inverted index for description field 
 
-| term   | document #1 | document #2 |
-| :----: | :---------: | :---------: |
-| coffee |    x        |      x      |
-| maker  |     x       |      x      |
+| term      | document #1 | document #2 |
+| :-------: | :---------: | :---------: |
+| makes     |     x       |      x      |
+| coffee    |     x       |             |
+| super     |     x       |             |
+| fast      |     x       |             |
+| delicious |             |      x      |
+| toast     |             |      x      |
 
 
 
@@ -695,6 +700,180 @@ Since Apache Lucene index cannot store object, inner objects are stored as docum
 The `keyword` data type should be used for fields on which we want to search for exact values. Since only exact searching is supported, this data type is used for filtering, sorting and aggregating documents. One use case is for the enum values. 
 
 On the other side, we have to use the `text` data type instead if we do not want exact matches.
+
+### How the keyword data type works
+Keyword fields are analyzed with the `keyword analyzer`, that is a `no-op` analyzer. That is, it outputs the unmodified string as a single token, which in turn is placed into the inverted index. This because this data type is used for exact matches. Moreover, this explains why it cannot be used for full text searches as `text` data types.
+
+We can test the behvaior of the keyword analyzer through the `_analyze` api
+
+```
+POST /_analyze
+{
+    "text": "2 guys walk into     a bar... wow!"
+    "analyzer": "keyword"
+}
+```
+
+We would get the response 
+
+``` json
+{
+    "tokens": [
+        {
+            "token": "2 guys walk into     a bar... wow!"
+            "start_offset": 0,
+            "end_offset": 53,
+            "type": "word",
+            "position": 0
+        }
+    ]
+}
+```
+
+A typical use case of the keyword analyzer is with email addresses, where we would like to store them in lower case. We can achieve this customizing the keyword analyzer to use the lowercase token. 
+
+
+`keyword` fields are used for exact matching, aggregation and sorting
+
+
+### Understanding Type Coercion
+Elasticsearch checks the data types for each field value when we index a document. A part of this process is to validate the data types and reject field values that are obviously invalid.
+
+Let's run the following queries, where the index `coercion` does not exist yet. A mapping for the “price” field has actually been created due to dynamic mapping. What Elasticsearch did, was to inspect the value that we supplied in order to figure out its data type. In this case we supplied a floating point number, so the `float` data type was used within the mapping.
+
+As for the next query, you have probably noticed how the floating point number has been wrapped within double quotes, effectively turning it into a string value. The document was indexed correctly even though we supplied a string value instead of a floating point number, because of **type coercion**. Elasticsearch first resolves the data type that was supplied for a given field. In the case where there is a mapping for the field, the two data types are compared. Since we supplied a string for a numeric data type, Elasticsearch inspects the string value. If it contains a numeric value — and only a numeric value — Elasticsearch will convert the string to the correct data type, being “float” in this example. The result is that a string of 7.4 is converted into the floating point number 7.4 instead, and the document is indexed as if we had supplied a number in the first place. The third query won't succeed because the data type is incorrect, and Elasticsearch was unable to coerce the value into the appropriate data type.
+
+
+If we retrieve the second document we indexed, the value within the source document is a string and not a float. This because the “_source” key contains the original values that we indexed. These are not the values that Elasticsearch uses internally when searching for data. Elasticsearch searches the data structure used by Apache Lucene to store the field values. In the case of text fields, that would be an inverted index. In this example, the value has been converted into a float, even though we see a string here. Within Apache Lucene, the value is stored as a numeric value and not a string. This means that if you make use of the value within the “_source” key, you need to be aware that the value may be either a float or a string, depending on the value that was supplied at index time.
+
+To change the behavior, we either need to supply the correct data type in the first place, or disable coercion.
+
+```
+PUT /coercion/_doc/1
+{
+    "price": 7.4
+}
+
+# elasticsearch applies coercion
+PUT /coercion/_doc/2
+{
+    "price": "20.5"
+}
+
+# an error will be thrown
+PUT /coercion/_doc/3
+{
+    "price": "7.4m"
+}
+```
+
+Coercion is not used when figuring out which data type to use for a field with dynamic mapping. This means that if you supply a string value, the data type will be set to “text” even if the string only contains a number.
+
+In general you should always try to use the correct data types. It’s especially important when you index a new field, to ensure that the correct data type is used in the mapping — provided that you make use of dynamic mapping. Anyway, the point is that Elasticsearch does not use coercion when creating field mappings for us; it’s only used as a convenience that forgives us if we use the wrong data types.
+
+Coercion is enabled by default to make Elasticsearch as easy and forgiving as possible.
+
+
+### Understanding Arrays 
+In elasticsearch it does not exist the array data type because any field in elasticsearch may contain zero or more values by default: we can index an array of values without defining this within the field's mapping. Indeed, all of the following queries are valid
+
+```
+POST /_products/_doc
+{
+    "tags": "smartphone"
+}
+```
+
+```
+POST /_poroducts/_doc
+{
+    "tags": ["smartphone", "electronics"]
+}
+```
+
+Both will end to the following mapping, that does not contains any reference
+
+```
+{
+    "products": {
+        "mappings": {
+            "properties": {
+                "tags":
+                    "type": "text"
+            }
+        }
+    }
+}
+```
+
+Internally, in case of text fields the strings are simply concatenated before being analyzed, and the resulting tokens are stored within an inverted index as normal. We can verify it running the following query
+
+```
+POST /_analyze
+{
+    "text": ["strings are simmply", "merged together"],
+    "analyzer": "standard"
+}
+```
+
+The result of this query contains tokens from both strings. The character offsters for the last two tokens, originating from the second string. The offsets don't start over from zero, but rather continue from the last offset of the previous string. The fields used to keep track of the offset of the tokens are `start_offset` and `end_offset`. The `position` field indicate the order of the token inside of the array. Hence, an array is treated as a string, obtained by concatenating all the items of the array. 
+
+In the case of non-text fields, the values are not analyzed, and multiple values are just stored within the appropriate data structure within Apache Lucene.
+
+The array items in elasticsearch must be of the same data type. To be more precise, they can be of different data types as long as the provided types can be coerced into the data type used within the mapping. In this case, coercion must be enabled. Notice that coercion only works for fields that are already mapped. If creating a field mapping withdynamic mapping, an array must contain the same data type. 
+
+Arrays may contain nested arrays, which are flattened during indexing: `[1, [2, 3] ] -> [1, 2, 3]`. Remember to use the `nested` data type for arrays of objects if we need to query the objects independently.  If we do not need to query the objects independelty, we can just use the `object` data type. 
+
+### Adding Explicit Mappings
+We can add field mappings both when creating an index and afterwards. However, tipically the mapping is done right after index creation. All field mappings should be defined within a “properties” key. That’s the case for fields at every level of the hierarchy, including nested objects
+
+```
+PUT /reviews
+{
+    "mappings": {
+        "properties": {
+            "rating": { "type": "float" },
+            "content": { "type": "text" },
+            "product_id": { "type": "integer" },
+            "author": {
+                "properties": {
+                    "first_name": { "type": "text" },
+                    "last_name": { "type": "text" },
+                    "email": { "type": "keyword" }
+                }
+            }
+        }
+    }
+}
+```
+
+Now, if we try to index a document having an object in the field `author.email`, elasticsearch will throw an error. 
+
+Elasticsearch does not have a naming convention for field names, but camelCase and snake_case are the most widely used for json, so is a good idea to use one of those. 
+
+### Retrieve Mappings
+To retrieve an index dynamic mapping
+
+```
+GET /reviews/_mapping
+```
+
+We can retrieve the mapping for a specific field
+
+```
+GET /reviews/_mapping/field/content
+GET /reviews/_mapping/field/author.email
+```
+
+
+
+
+
+
+
+
+
+
 
 
 
