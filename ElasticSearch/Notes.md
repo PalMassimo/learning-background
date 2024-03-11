@@ -1276,11 +1276,310 @@ POST /sales/_doc
 }
 ```
 
+### Updating existing mappings
+We know it's possible to add a new field mappings to an existing index. However, except some cases, we cannot update an existing field mapping.
+
+Some mapping parameters can be updated, but only a few of them. For instance, if we have a field mapping we can add the parameter `ignore_above` to ignore strings longer than the specified value such that they will not be indexed or stored.
+
+```json
+PUT /reviews/_mapping
+{
+    "properties": {
+        "author": {
+            "properties": {
+                "email": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                }
+            }
+        }
+    }
+}
+```
+
+We also cannot remove a field mapping once you have added it. If we want to reclaim the storage space used by the field, we could use the `update_by_query` API and remove the field from each matching document with a script.
+
+Changing a field mapping almost always requires documents to be reindexed. That’s why Elasticsearch protects us by simply not allowing existing mappings to be updated - except for a small number of parameters.
+
+### `reindex` api
+
+To reindex documents we have to create a new index and define the new mapping and optionally any index settings. To edit the existing mapping it can be useful retrieve the current one
+
+```
+GET /reviews/_mappings
+```
+
+Let's create the new index with the new mapping
+
+```json
+PUT /reviews_new
+{
+    "mappings": {
+        "properties": {
+            ...
+        }
+    }
+}
+```
+
+Once the new index has been created, to reindex the documents from the previous index to the new one elasticsearch expose the `reindex` api. The HTTP verb is `POST` and the endpoint is simply `_reindex`
+
+```json
+POST /_reindex
+{
+    "source": {
+        "index": "source_index"
+    },
+    "dest": {
+        "index": "destination_index"
+    }
+}
+```
+
+We can modify documents during reindexing, is to supply a script that is run for each document.
+
+```
+POST /_reindex
+{
+    "source": {
+        "index": "reviews"
+    },
+    "dest": {
+        "index": "reviews_new"
+    },
+    "script": {
+        "source": """
+        if(ctx._source.product_id != null){
+            ctx._source.product_id = ctx._source.product_id.toString();
+        }
+        """
+    }
+}
+```
+
+To delete all the documents in an index, we can use the `delete_by_query` api: 
+
+```
+POST /reviews_new/_delete_by_query
+{
+    "query": {
+        "match_all": {}
+    }
+}
+```
+
+We can reindex documents that only matches a query
+
+```
+POST /_reindex
+{
+  "source": {
+    "index": "reviews",
+    "query": {
+      "range": {
+        "rating": {
+          "gte": 4.0
+        }
+      }
+    }
+  },
+  "dest": {
+    "index": "reviews_new"
+  }
+}
+```
 
 
+Next, suppose that we want to remove a field: we cannot delete a field mapping, but we can just leave out the field when indexing new documents. However, if we have indexed lots of documents, perhaps we want to reclaim the disk space used by the field. Remember that even though we stop supplying a value for a field when indexing new documents, the existing values are still maintained within a data structure.
+The way we can do this is to use so-called **source filtering**. By specifying an array of field names, only those fields are included for each document when they are indexed into the destination index. In other words, any fields that you leave out will not be reindexed. It’s possible to do the same thing with a script, but using the `_source` parameter is a simpler approach.
+
+```
+POST /_reindex
+{
+  "source": {
+    "index": "reviews",
+    "_source": ["content", "created_at", "rating"]
+  },
+  "dest": {
+    "index": "reviews_new"
+  }
+}
+```
 
 
+Sometimes you might want to rename a field, such as renaming the `content` field to `comment`. Just to know, the `_source` key translates to a Java HashMap. 
 
+
+```
+POST /_reindex
+{
+  "source": {
+    "index": "reviews"
+  },
+  "dest": {
+    "index": "reviews_new"
+  },
+  "script": {
+    "source": """
+      # Rename "content" field to "comment"
+      ctx._source.comment = ctx._source.remove("content");
+    """
+  }
+}
+```
+
+
+Just as with scripted updates, it’s possible to specify the operation for the document within the script. That’s done by assigning a value to the “op” property on the `ctx` variable. We can assign a value of either `noop` or `delete`. In the case of `noop` the document will not be indexed into the destination index. This is useful if you have some advanced logic to determine whether or not you need to reindex documents.
+
+```
+POST /_reindex
+{
+  "source": {
+    "index": "reviews"
+  },
+  "dest": {
+    "index": "reviews_new"
+  },
+  "script": {
+    "source": """
+      if (ctx._source.rating < 4.0) {
+        ctx.op = "noop"; # Can also be set to "delete"
+      }
+    """
+  }
+}
+```
+
+Setting the operation to `delete` causes the document to be deleted within the destination index. This can be useful because the document might already exist within that index.
+
+`reindex` api has more options. For example, you can define how to handle version conflicts, just as with the Update by Query API. That’s because the Reindex API also makes a snapshot of the index before indexing documents into the destination index. By default, the operation is aborted if a version conflict is encountered.
+
+
+### Field Aliases
+We can define field aliases that point to other existing fields. Field aliases can be used in our queries instead of the original name.
+
+Add `comment` alias pointing to the `content` field using the `path` parameter
+
+```
+PUT /reviews/_mapping
+{
+  "properties": {
+    "comment": {
+      "type": "alias",
+      "path": "content"
+    }
+  }
+}
+```
+
+Now we can use the alias `comment` in place of the field `content`
+
+```
+GET /reviews/_search
+{
+  "query": {
+    "match": {
+      "comment": "outstanding"
+    }
+  }
+}
+```
+
+A field alias is useful in situations where you want to rename a field but don’t want to reindex data just for that purpose.
+
+A field alias is actually one of the few examples of mappings that can be updated. Not its name, but its target field. If you want to change the field that an alias points to, you can simply perform a mapping update with a new value for the `path` parameter. That’s possible because an alias has no influence on how values are indexed; it is simply a construct used when parsing queries, whether it’s a search or index request.
+
+
+### Multi field mappings
+A field may actually be mapped in multiple ways. For instance, a `text` field may be mapped as a `keyword` field at the same time. We cannot run aggregations on `text` fields, we need to use the `keyword` data type. This is why can be useful to have a field with multiple types. Aggregations can also be run on dates and numbers. 
+
+```
+PUT /multi_field_test
+{
+  "mappings": {
+    "properties": {
+      "description": {
+        "type": "text"
+      },
+      "ingredients": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+
+### Index Templates
+An index template is a way to automatically apply settings and field mappings whenever a new index is created - provided that its name matches one of the defined patterns. 
+
+To create a new index template, we send a PUT request to the request path you see within the example, where the last part is an arbitrary name for the index template. The index_patterns option is an array of wildcard expressions that are used to match against the name of any new index. Before creating a new index, Elasticsearch checks if there are any index templates containing at least one pattern that matches the index name. If so, the index template is applied to the new index’ configuration before it is created. The index_patterns option therefore configures when the index template is applied. Note that the two nested keys are optional, so you could choose to only include index settings, for instance.
+
+```json
+PUT /_index_template/access-logs
+{
+  "index_patterns": ["access-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 2,
+      "index.mapping.coerce": false
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "url.original": { "type": "wildcard" },
+        "url.path": { "type": "wildcard" },
+        "url.scheme": { "type": "keyword" },
+        "url.domain": { "type": "keyword" },
+        "client.geo.continent_name": { "type": "keyword" },
+        "client.geo.country_name": { "type": "keyword" },
+        "client.geo.region_name": { "type": "keyword" },
+        "client.geo.city_name": { "type": "keyword" },
+        "user_agent.original": { "type": "keyword" },
+        "user_agent.name": { "type": "keyword" },
+        "user_agent.version": { "type": "keyword" },
+        "user_agent.device.name": { "type": "keyword" },
+        "user_agent.os.name": { "type": "keyword" },
+        "user_agent.os.version": { "type": "keyword" }
+      }
+    }
+  }
+}
+```
+
+However, even if an index matches a template, the settings specified at the index creation have the precedence before the ones specified in the template
+
+To update a template the request is exactly the same (note the `PUT` verb). This doesn’t modify indices that have already been created.
+
+To retrieve an index template
+
+```
+GET /_index_template/access-log
+```
+
+To delete an index template
+
+```
+DELETE /_index_template/access-log
+```
+
+When defining your index patterns, it’s important to know that Elasticsearch ships with a handful of index templates that are used for its observability solution. We should therefore stay clear of using index patterns that collide with these. If that’s not an option, you can disable these index templates or circumvent them by adding priorities to your index templates. Check [documentation](https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-put-template.html) for more information. The reserved index patterns are
+
+```
+logs-*-*
+metrics-*-*
+synthetics-*-*
+profiling-*
+```
+
+By default you cannot add multiple index templates that contain overlapping index patterns. That’s because only a single index template can be applied to a new index. If you try to add a new index template that contains an index pattern that overlaps with another one, you will get an error.
+
+To solve this, we can add a priority option to both index templates. The value should be a natural number, i.e. zero or higher. When no explicit priority is specified, it defaults to zero. The higher the number, the higher priority an index template has. The two index templates can therefore be added despite the fact that their index patterns overlap. Whenever multiple index templates match a new index, the one with the highest priority is simply used.
 
 
 
