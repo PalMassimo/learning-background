@@ -1582,24 +1582,251 @@ By default you cannot add multiple index templates that contain overlapping inde
 To solve this, we can add a priority option to both index templates. The value should be a natural number, i.e. zero or higher. When no explicit priority is specified, it defaults to zero. The higher the number, the higher priority an index template has. The two index templates can therefore be added despite the fact that their index patterns overlap. Whenever multiple index templates match a new index, the one with the highest priority is simply used.
 
 
+### Introduction to dynamic mapping
+
+It’s essentially a way to make Elasticsearch easier to use by not requiring us to define explicit field mappings before indexing documents. The first time Elasticsearch encounters a field, it will automatically create a field mapping for it, which is then used for subsequent indexing requests.
+
+When a document with unknown fields is inserted in an index, elasticsearch automatically creates a mapping for each of such fields. Let's suppose we have created an index with no mapping. If we add a document like the following
+
+```
+POST /dynamic_index/_doc
+{
+  "tags": ["computer", "electronics"],
+  "in_stock": 4,
+  "created_at": "2020/01/01 00:00:00"
+}
+```
+
+The mapping we get is
+
+```
+{
+  "created_at":  {
+    "type": "date",
+    "format": "yyyy/MM/dd HH:mm:ss|| yyyy/MM/dd||epoch_millis"
+  },
+  "in_stock": {
+    "type": "long",
+  },
+  "tags": {
+    "type": "text",
+    "fields": {
+      "keyword": {
+        "type": "keyword",
+        "ignore_above": 256,
+      }
+    }
+  }
+}
+```
+
+where the date has been marked as date even if it was provided as a string because elasticsearch performs a date detection. The `tags` field was mapped as a multi-field with both the `text` and `keyword` data types. This is because elasticsearch doesn't know if we will use the field to perform text queries or aggregations. 
+
+Elasticsearch has riles that are used to determine how fields are mapped dynamically
+
+| JSON | Elasticsearch |
+| ------  | -------------- |
+| string  | one of the following: `text` field with `keyword` mapping, `date` field, `long` or `float` field |
+| integer                | `long` |
+| floating point numbers | `float` |
+| true or false          | `boolean` |
+| object                 | `object` |
+| array                  | depends on the first non null value | 
+
+Dynamic mapping does not always infer the right mapping.
 
 
+### Configuring dynamic mapping
+
+We can disable dynamic mapping when creating an index
+
+```
+PUT /people
+{
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "first_name": {
+        "type": "text"
+      }
+    }
+  }
+}
+```
+
+Now if we try to add a document to the index 
+
+```
+POST /people/_doc
+{
+  "first_name": "Bo",
+  "last_name": "Andersen"
+}
+```
+
+We don't get any error, but if we try to perform a query based on the element not present in the mapping, no results will be returned. So, the following will work and we get the whole document with both `first_name` and `last_name`
+
+```
+GET /people/_search
+{
+  "query": {
+    "match": {
+      "first_name": "Bo"
+    }
+  }
+}
+```
+
+Instead, the following won't give us back any document
+
+```
+GET /people/_search
+{
+  "query": {
+    "match": {
+      "last_name": "Andersen"
+    }
+  }
+}
+```
+
+In other words, the fields not present in the mapping do not trigger any data structured associated to perform queries. 
 
 
+This approach works but it is not recommended. `dynamic` can not be set only to `true` or `false` but also to `strict`. With this last configuration, elasticsearch will reject any document that contain fields not present in the index mapping.
+
+```
+PUT /people
+{
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "first_name": {
+        "type": "text"
+      }
+    }
+  }
+}
+```
 
 
+Inheritance is actually supported for the `dynamic` setting, which gives you fine grained control of dynamic mapping. Suppose that we are indexing computers. We set dynamic mapping to `strict` at the index level. All of the fields within the index inherit this configuration. At the top level, this means that both the `name` and `specifications` fields inherit the `dynamic` setting with a value of `strict`. The inheritance works on multiple levels, so the nested `cpu` and `other` fields inherit the setting from its parent field, being the `specifications` field. Since the `cpu` field has inherited strict mapping, we can only provide a `name` field for this object. 
 
+```
+PUT /computers
+{
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "name": {
+        "type": "text"
+      },
+      "specifications": {
+        "properties": {
+          "cpu": {
+            "properties": {
+              "name": {
+                "type": "text"
+              }
+            }
+          },
+          "other": {
+            "dynamic": true,
+            "properties": { ... }
+          }
+        }
+      }
+    }
+  }
+}
+```
 
+The index query on your screen therefore fails because there is no mapping for the `frequency` field. The `other` field stores many different fields depending on the product, so we cannot map all of the possible fields in advance. Instead, we can enable dynamic mapping for just that particular field, overriding the inherited value. Since the `other` field is an object, its properties will inherit this configuration, enabling us to add new fields dynamically. In this example, we can add a `security` field just fine.
 
+The following query hence will fail
 
+```
+POST /computers/_doc
+{
+  "name": "Gamer PC",
+  "specifications": {
+    "cpu": {
+      "name": "Intel Core i7-9700K",
+      "frequency": 3.6
+    }
+  }
+}
+```
 
+Instead, this one will work
 
+```
+POST /computers/_doc
+{
+  "name": "Gamer PC",
+  "specifications": {
+    "cpu": {
+      "name": "Intel Core i7-9700K"
+    },
+    "other": {
+      "security": "Kensington"
+    }
+  }
+}
+```
 
+We can enable numeric_detection: elasticsearch will check the contents of strings to see if they contain only numeric values. If that is the case, the data type of a field witll be set to either `float` or `long` when mapped through dynamic mapping.
 
+The mapping
 
+```
+PUT /computers
+{
+  "mappings": {
+    "numeric_detection": true
+  }
+}
+```
 
+A document example
 
+```
+POST /computers/_doc
+{
+  "specifications": {
+    "other": {
+      "max_ram_gb": "32", # long
+      "bluetooth": "5.2" # float
+    }
+  }
+}
+```
 
+We can also configure **date_detection**. By default, Elasticsearch inspects string values to look for dates in one of the formats: `strict_date_optional_time`, `yyyy/MM/dd HH:mm::ss Z` or `yyyy/MM/dd Z`. If there is a match, Elasticsearch will create a `date` field, provided that the field hasn’t been seen before, and that dynamic mapping is enabled. The field is created using the default date format. 
+
+We can disable date detection altogether by setting the `date_detection` setting to `false`
+
+```
+PUT /computers
+{
+  "mappings": {
+    "date_detection": false
+  }
+}
+```
+
+We can also configure the dynamic date formats that are recognized. This may be useful if you have applications sending dates to Elasticsearch in non-standard formats. Those were the basic — and probably most common — ways in which you can configure dynamic mapping. 
+
+```
+PUT /computers
+{
+  "mappings": {
+    "dynamic_date_formats": ["dd-MM-yyyy"]
+  }
+}
+```
+
+There is another way, though, described in the next paragraph.
 
 
 
