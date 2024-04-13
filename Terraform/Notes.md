@@ -542,8 +542,9 @@ Terraform allows to have multiple workspaces, with each of the workspace we can 
 ```bash
 $ terraform workspace list       # list all terraform workspaces
 $ terraform workspace new dev    # create a workspace named dev
-$ terraform workspace show       # show the current workspace
+$ terraform workspace show       # print the current workspace
 $ terraform workspace select dev # change workspace
+$ terraform workspace delete dev # delete the dev workspace
 ```
 
 To dinamically use a variable value based on the workspace, see the example below
