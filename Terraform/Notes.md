@@ -219,7 +219,7 @@ Terraform has detailed logs which can be enabled by setting the `TF_LOG` environ
 To redirect the output commands to a file, we can set the environment variable `TF_LOG_PATH`, for example
 
 ```terraform
-export TF_LOG=/tmp/terraform.log
+export TF_LOG_PATH=terraform.log
 ```
 
 ### Load order and Semantics
@@ -467,12 +467,12 @@ The `null_resource` implements the standard resource lifecycle but takes no furt
 ## Terraform Modules
 
 ### Referencing module outputs
-To reference an output variable of a module use the syntax `module.module_name.output_variable_name`.
+To reference an output variable of a module use the syntax `module.module_name.output_variable_name`
 
 ### Terraform Registry
 The **Terraform Registry** is a repository of modules written by the terraform community. We can find verified modules that are maintained by various third party vendors.
 
-Verified modules are reviewed by HashiCorp and actively maintained by contributors to stay up to date and compatible with both terraform and their respective providers. Such modules are marked tiwh a blue verification badge and can be written only by a small group of trusted HashiCorp partners. 
+Verified modules are reviewed by HashiCorp and actively maintained by contributors to stay up to date and compatible with both terraform and their respective providers. Such modules are marked with a blue verification badge and can be written only by a small group of trusted HashiCorp partners. 
 
 It follows an example of a module present in the terraform registry
 
@@ -529,7 +529,7 @@ $ tree complex-module/
 |   |   |-- variables.tf
 |   |   |-- main.tf
 |   |   |-- outputs.tf
-|--exmaples/
+|--examples/
 |   |-- exampleA/
 |   |   |-- main.tf
 |   |-- exampleB/
@@ -540,27 +540,28 @@ $ tree complex-module/
 Terraform allows to have multiple workspaces, with each of the workspace we can have different set of environment variable associated. The command to work with workspaces is `terraform workspace`. To show all possible commands associated, run `terraform workspace -h`
 
 ```bash
-$ terraform workspace list       # list all terraform workspaces
-$ terraform workspace new dev    # create a workspace named dev
+$ terraform workspace list       # list all workspaces
+$ terraform workspace new dev    # creates dev workspace
 $ terraform workspace show       # show the current workspace
 $ terraform workspace select dev # change workspace
 ```
 
 To dinamically use a variable value based on the workspace, see the example below
 
-```bash
+``` terraform
 resource "aws_instance" "ec2" {
     ami          = "ami-8932nkldsf28"
     instance_type = lookup(var.instance_type, terraform.workspace)
 }
 
 variable "instance_type" {
-type = "map"
+    type = "map"
 
-default = {
-    default = "t3.nano"
-    dev     = "t3.micro"
-    prod    = "t3.large"
+    default = {
+        default = "t3.nano"
+        dev     = "t3.micro"
+        prod    = "t3.large"
+    }
 }
 ```
 
@@ -613,7 +614,7 @@ module "storage" {
 }
 ```
 
-By default, terraform wiull clone and use the default branch (referenced by HEAD) in the selected repository. We can override this using the `ref` argument
+By default, terraform will clone and use the default branch (referenced by HEAD) in the selected repository. We can override this using the `ref` argument
 
 ```terraform
 module "vpc" {
@@ -626,15 +627,15 @@ the value of `ref` argument can be any reference that would be accepted by the g
 ### Terraform and .gitignore
 Depending on the environments, it is recommended to avoid committing certain files to git
 
-| Files to ignore     | description |
-| :-----------------: | -------------------- |
+| Files to ignore     | description                                              |
+| :-----------------: | -------------------------------------------------------- |
 | `.terraform`        | cache directory, recreated with `terraform init`         |
 | `terraform.tfvars`  | likely contains sensitive data like passwords            |
 | `terraform.tfstate` | should be stored not in git repo but in the remote state |
 | `crash.log`         | if terraform crashes, the logs are stored to this file   |
 
 ### Terraform Backend
-Backends primarily determine where terraform stores its state. By default, terraform implicitly uses a backend called `local` to store state as a local file on disk.
+Backends primarily determine where terraform stores its state. By default, terraform implicitly uses a backend called `local` to store state in a local file on disk.
 
 To make a terraform project able to be handled by a team, we have to store the `terraform.tfstate` in a central backend, instead the code on a central git repository.
 Terraform supports multiple backends that allows remote service related operations. Some of the most popular are
@@ -709,7 +710,7 @@ Lock Info:
     Info: 
 ```
 
-These information about the lock is the value associated to the LockID key. Hence, in the dynamodbtable will have an entry like this
+These information about the lock is the value associated to the LockID key. Hence, in the dynamodb table will have an entry like this
 
 | LockID                                |  Info                                                 |
 | :-----------------------------------: | ----------------------------------------------------- |
@@ -822,9 +823,17 @@ resource "aws_eip" "first_eip"{
 ```
 
 ### HashiCorp Vault
-**HashiCorp Vault** allows organizations to securely store secrets like tokens and certificates along with access management. It is able to generate secrets like ec2 key pairs or access keys for an iam user, or credentials for a MySQL database.
+**HashiCorp Vault** allows organizations to securely store secrets like tokens and certificates along with access management. It is able to generate secrets like ec2 key pairs or access keys for an iam user, or credentials for a MySQL database. It can rotate secrets or make it valid for only amount of time. 
 
+
+Initially Vault can be used only through a CLI, but thanks to Hashicorp is now possible to use Vault trough a GUI.
+
+Hashicorp Vault can also be used to encrypt and decrypt any kind of data, generate random data and has other useful features.
+
+### Vault Provider
 The Vault provider allows terraform to read from, write to, and configure HashiCorp Vault. 
+
+The following snippet shows how to use the secrets generated by Vault in Terraform
 
 ```terraform
 provider "vault" {
@@ -834,7 +843,25 @@ provider "vault" {
 data "vault_generic_secret" "db_credentials" {
     path = "secret/db-creds"
 }
+
+output "vault_secret" {
+    value = data.vault_generic_secret.db_credentials
+    sensitive = "true"
+}
 ```
+
+Inspecting the section `output` of the state we will see 
+
+```terraform
+"outputs": {
+    "vault_secret": {
+        "value": "{\"admin\":\"password\"}",
+        "type" : "string",
+        "sensitive": true
+    }
+}
+```
+
 
 It's important to notice that secrets won't be encrypted in `terraform.tfstate` file. 
 
@@ -842,9 +869,17 @@ It's important to notice that secrets won't be encrypted in `terraform.tfstate` 
 ## Terraform Cloud
 Terraform Cloud manages terraform runs in a consistent and reliable environment with various features like access controls, private registry for sharing modules, policy controls and others.
 
+
 ### Workspace
-We can set one or more workflows, having as source a version control system like GitHub, GitLab, Bitbucket or Azure DevOps. The workflow can run commands like `terraform plan` or `terraform apply`, and the last one can require a manual approve after examining the desired state.
-To run such commands however we need to set workspace variables, like aws access keys. 
+Terraform Cloud provides additional features, like cost estimation after a `terraform plan`, store in it the terraform state, see the terraform runs.
+
+We can set one or more workflows, having as source a version control system like GitHub, GitLab, Bitbucket or Azure DevOps. The workflow can run commands like `terraform plan` or `terraform apply`, and the last one can require a manual approve after examining the desired state. 
+
+We can set two types of variables: the terraform variables and the environment variables. One example of environment (or workspace) variables are aws access keys. 
+
+We can have private modules in Terraform Cloud.
+
+We can set a github repository as source from which we can trigger events 
 
 ### Workspace Sentinels
 We can associate sentinels set policies to workspace. A sentinel policy is a rule that checks if resources that are going to be deployed satisfy such constraints. Rules depends on which provider the resources belong to.
@@ -857,8 +892,8 @@ An example of sentinel policy checks if a resource has a tag or not. We can set 
 Sentinels do not prevent to manual changes from the console. Sentinels are a paid feature.
 
 ### Backend Operations Types
-The remote backend stores terraform state and may be used to run operations in the terraform cloud.
-Terraform cloud can also be used with localo operations, in which case only state is stored in the terraform cloud backend
+Terraform cloud supports `local` and `remote` backend operation types. The **remote backend** stores terraform state and may be used to run operations in the terraform cloud, instead with the **local backend**
+Terraform cloud can also be used with local operations, in which case only state is stored in the terraform cloud backend
 
 When using full remote operations (e.g. `terraform plan`) can be executed in terraform cloud's run environment, with log output streaming to the local terminal. 
 The output shown in the local terminal will be the same as the one shown if the command was run in the cloud. 
@@ -884,7 +919,8 @@ It is needed to have a token to connect to the terraform cloud: to get it run `t
 Only after logging in we can run `terraform init`. 
 
 Notice that if the workspace is connected to a VCS - Version Control System we cannot run the commands from the terminal because we will have two repositories (the local and the remote),
-so two source of truth. Hence, if we want to run the terraform commands form the local terminal is suggested to not use the **version control workflow** but to use the `CLI-driven workflow instead. 
+so two source of truth. Hence, if we want to run the terraform commands form the local terminal is suggested to not use the **version control workflow** but to use the CLI-driven workflow instead. 
+Indeed, when creating a workflow from the terraform cloud, we can select the option "version control flow" or "CLI-driven workflow". To use the last option we have to run `terraform login` to get the API token.
 
 #### Remote Backend Configuration - deep dive
 The reccomended way to set the remote configuration is 
@@ -895,7 +931,7 @@ terraform {
         organization = "demo-organization"
 
         workspaces {
-            name = "cli-driven-workspace
+            name = "cli-driven-workspace"
         }
     }
 }
@@ -907,7 +943,8 @@ An air gap is a network security measure employed to ensure that a secure comput
 Terraform Enterprise installs using either an online or air gapped method. The first method requires an internet connectivity, the secondo doesn't.
 
 
-
+# Topics to review
+terraform plan -refresh-only command is used to create a plan whose goal is only to update the terraform state to match any changes made to remote objects outside of terraform. It does not apply those changes to the state. 
 
 
 

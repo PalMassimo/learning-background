@@ -1829,6 +1829,204 @@ PUT /computers
 There is another way, though, described in the next paragraph.
 
 
+### Dynamic Templates
+Another way to configure dynamic mapping is by using so-called **dynamic templates**. A dynamic template consists of one or more conditions along with the mapping a field should use if it matches the conditions. Dynamic templates are used when dynamic mapping is enabled and a new field is encountered without any existing mapping.
+
+Dynamic templates are added within a key named `dynamic_templates`, nested within the `mappings` key. Let's define a dynamic template that make elasticsearch assign an `integer` type instead of a `long` type
+
+```json
+PUT /dynamic_template_index
+{
+  "mappings": {
+    "dynamic_templates": {
+      "integers": {
+        "match_mapping_type": "long"
+      }
+    }
+  }
+}
+```
+
+The `match_mapping_type` parameter is used to match a given JSON data type. The following table lists JSON data types and which value should be used for the parameter within the dynamic template. The values to the right are not the data types that fields will be mapped as; we will define those in a moment. Moreover, the  `double` is used for numbers with a decimal, since there is no way of distinguishing a `double` from a `float` in JSON, the same for `integer` and `long`. The condition is specified within the `mapping` parameter. Hence, we have defined a condition that evaluates to true if the detected JSON data type is `long`
+
+in which case the field mapping will be as specified.
+
+| JSON value        | `match_mapping_type` |
+| :---------------: | :------------------: |
+| true or false     | `boolean`        |
+| { ... } (objects) | `object`         |
+| "string value"    | `string`         |
+| "2020/01/01"      | `date`           |
+| 123.4             | `double`         |
+| 123               | `long`           |
+| Any               | `*`              |
+
+
+Another example of a dynamic template could be to adjust how strings are mapped.They are mapped as both a `text` mapping and a `keyword` mapping by default. That might be what you want, but it could also be the case that you only want one of them. Or perhaps you want to change the value of the `ignore_above` parameter or get rid of it altogether.
+
+```json
+PUT /test_index
+{
+  "mappings": {
+    "dynamic_templates": [
+      {
+        "strings": {
+          "match_mapping_type": "string",
+          "mapping": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 512
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+Besides simply matching based on the detected JSON data type, we have a number of other options available, like the `match` and `unmatch` parameters.  These parameters enable to specify conditions for the name of the field being evaluated. The `match` parameter is used to specify a pattern that the field name must match, `unmatch` parameter can then be used to specify a pattern that excludes certain fields that are matched by the `match` parameter.
+
+Considering the following, it includes two dynamic templates. In situations where there are more than one, the templates are processed in order, and the first matching template wins.
+
+```json
+PUT /test_index
+{
+  "mappings": {
+    "dynamic_templates": [
+      {
+        "strings_only_text": {
+          "match_mapping_type": "string",
+          "match": "text_*",
+          "unmatch": "*_keyword",
+          "mapping": {
+            "type": "text"
+          }
+        }
+      },
+      {
+        "strings_only_keyword": {
+          "match_mapping_type": "string",
+          "match": "*_keyword",
+          "mapping": {
+            "type": "keyword"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+The first template matches fields where the name begins with the string `text` and an underscore. The `unmatch` parameter when filters out fields that end with an underscore and the string `keyword`. What this template does is therefore to map string values to `text` fields — provided that the field name matches the pattern defined by the `match` parameter and doesn’t match the pattern defined by the `unmatch` parameter.
+
+Fields names that end with an underscore followed by the string `keyword` are caught by the second template that maps them as `keyword` fields. This means that if we run the following query the description field matched the first template, whereas the product ID field matched the second.
+
+```json
+POST /test_index/_doc
+{
+  "text_product_description": "A description.",
+  "text_product_id_keyword": "ABC-123"
+}
+```
+
+Both the templates included the `match_mapping_type` parameter as well because we can include more than one condition within a dynamic template; the parameters that you have seen can all be combined to form a set of match conditions, so you are not limited to just one.
+
+If we need more flexibility than what the `match` parameter provides with wildcards, we can set a parameter named `match_pattern` to `regex`.
+
+```json
+PUT /test_index
+{
+  "mappings": {
+    "dynamic_templates": [
+      {
+        "names": {
+          "match_mapping_type": "string",
+          "match": "^[a-zA-Z]+_name$",
+          "match_pattern": "regex",
+          "mapping": {
+            "type": "text"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+We can test the dynamic template with the following query
+
+```json
+POST /test_index/_doc
+{
+  "first_name": "John",
+  "middle_name": "Edward",
+  "last_name": "Doe"
+}
+```
+
+Very similar to the `match` and `unmatch` parameters, we have the `path_match` and `path_unmatch` parameters. The difference is that these parameters match the full field path (i.e. the dotted path), instead of just the field name itself.
+Let’s look at an example.
+
+```json
+PUT /test_index
+{
+  "mappings": {
+    "dynamic_templates": [
+      {
+        "copy_to_full_name": {
+          "match_mapping_type": "string",
+          "path_match": "employer.name.*",
+          "mapping": {
+            "type": "text",
+            "copy_to": "full_name"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+the `copy_to` mapping parameter, which copies values into the specified field. In this case it enables us to query the full name as a single field, instead of having to query three different fields. A mapping will be created for the `full_name` field. It will be created using the default dynamic mapping rule for string values, meaning that it will be mapped as both a `text` and `keyword` field.
+
+Within the `mapping` key of a dynamic template, you can make use of two placeholders. The first one is named `dynamic_type`. The `dynamic_type` placeholder is replaced with the data type that was detected by dynamic mapping and matches all data types and adds a mapping of that same data type.
+
+```json
+PUT /test_index
+{
+  "mappings": {
+    "dynamic_templates": [
+      {
+        "no_doc_values": {
+          "match_mapping_type": "*",
+          "mapping": {
+            "type": "{dynamic_type}",
+            "index": false
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+The purpose of this template is to set the `index` parameter to `false`. The data type is going to be the same as it otherwise would be with dynamic mapping. This particular example with disabling indexing could be used for time series data.
+
+Anyway, let’s check the mapping that is created when adding the following document. As you can see, both field mappings have the `index` parameter set to `false` as we expected.
+
+```json
+POST /test_index/_doc
+{
+  "name": "John Doe",
+  "age": 26
+}
+```
+
+The difference between an index template and a dynamic template is that an index template applies field mappings and/or index settings when its pattern matches the name of an index. A dynamic template, on the other hand, is applied when a new field is encountered and dynamic mapping is enabled. If the template’s conditions match, the field mapping is added for the new field. A dynamic template is therefore a way to dynamically add mappings for fields that match certain criteria, where an index template adds a fixed set of field mappings.
 
 
 
