@@ -2029,6 +2029,89 @@ POST /test_index/_doc
 The difference between an index template and a dynamic template is that an index template applies field mappings and/or index settings when its pattern matches the name of an index. A dynamic template, on the other hand, is applied when a new field is encountered and dynamic mapping is enabled. If the template’s conditions match, the field mapping is added for the new field. A dynamic template is therefore a way to dynamically add mappings for fields that match certain criteria, where an index template adds a fixed set of field mappings.
 
 
+## Searching for Data
+
+### Introduction
+There are two ways in which we can write search queries. The first one is by including search queries as a query parameter, which is referred to as a URI search. The value of the query parameter should be in Apache Lucene’s query string syntax. The syntax won't be covered in this course because it is rarely used because it’s a simplified search that doesn’t offer all of the features that Elasticsearch provides. Plus, you would have to get familiar with Lucene’s query string syntax.
+
+```
+GET /products/_search?q=name:sauvigon AND tags:wine
+```
+
+where `q=name:sauvigon AND tags:wine` is the Apache Lucene syntax.
+
+
+Instead, we will cover `Query DSL`, which is the preferred way of writing search queries. Instead of embedding the query within a query parameter, it’s added within the request body, meaning that it should be in JSON.
+The two approaches use the same request path — and thereby API — being the Search API. The search query itself is defined within an object named `query`, in which we define the type of query as a key. The simplest query is the `match_all` query
+
+```dsl
+GET /products/_search
+{
+  "query": {
+    "match_all": {}
+  }
+}
+```
+
+A possible is the following, where
+
+- `took` tells the time it took for Elasticsearch to execute the request from the time it was received, in ms
+- `timed_out` tells whether or not the request timed out
+- `_shards`
+  - `total` specifies how many shards should be queried to execute the request. Note that this number includes shards that haven’t been allocated, so if the number is higher than you expect, then that is probably the reason.
+  - `successful` and `failed` specify the number of shards that executed the request successfully or unsuccessfully
+  - `skipped` represents the number of shards that skipped the request. A shard may skip executing the request if it determines that it contains no documents that can possibly match the request. This typically occurs for range values where the shard only stores documents that fall outside of the specified range.
+- `hits` contains the documents that matched the query along with some metadata. We have a total key that shows us how many documents matched the query.
+  - `eq` if the value key contains an accurate number, which will almost always be the case. There is a way to do some performance tuning of queries at the tradeoff of the value not being accurate. In that case the key will contain a value of `gte` 
+  - `max_score` contains the highest document score that was calculated by Elasticsearch.
+  -`hits` contains the actual documents that matched the query along with a bit of metadata for each document. First, we have the name of the index in which the document is stored.
+    -`_ignored` contains the names of fields that were ignored when the document was indexed. For this document that was the description.keyword field. The reason is that the mapping contains the ignore_above parameter with a value of 256, meaning that values longer than this are ignored. That’s how text fields are mapped by default with dynamic mapping.
+    -`_source` is the actual document
+
+```dsl
+{
+  "took": 5,
+  "timed_out": false,
+  "_shards": {
+    "total": 2,
+    "successful": 2,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 1000,
+      "relation": "eq",
+    },
+    "hits": [
+      {
+        "_index": "products",
+        "_id": "1",
+        "_score": 1,
+        "_ignored": [
+          "description.keyword"
+        ],
+        "_source": {
+          "name": "Wine - Maipo Valle Cabernet",
+          "price": 152,
+          "in_stock": 38,
+          "sold": 47,
+          "tags": [
+            "Beverage"
+            "Alcohol"
+          ],
+          "description": "sample description",
+          "is_active": true,
+          "created": "2004/05/13"
+        },
+        {
+          ...
+        }
+    ]
+  }
+}
+```
+
 
 
 
