@@ -122,7 +122,7 @@ All the queries we can run them with postman or curl
 
 In elasticseach, sharding is the mechanism to divide indexes into smaller pieces, that can be put on one or multiple machines. Each piece is called `shard`, and the main purpose is to horizontally scale the data volume.
 
-A `shard` is technically an **Apache Lucene Index**, and it can be thoughy as an independent index. Moreover, an elasticsearch index consists in one or more Apache Lucene indeces. A shard has no predefined size; it grows as documents are added to it and may store up to about two billion documents. With sharding we can improve a lot the performance, because of the parallelization of queries on multiple nodes increase the throughput of an index.
+A `shard` is technically an **Apache Lucene Index**, and it can be thought as an independent index. Moreover, an elasticsearch index consists in one or more Apache Lucene indeces. A shard has no predefined size; it grows as documents are added to it and may store up to about two billion documents. With sharding we can improve a lot the performance, because of the parallelization of queries on multiple nodes increase the throughput of an index.
 
 By default, now an index contains a single shard but up to version 7.0.0 an index was created with 5 shards, leading to _over-sharding_. We can increase the number of shards with `split` api or reduce it with `shrink` api.
 
@@ -2028,6 +2028,10 @@ POST /test_index/_doc
 
 The difference between an index template and a dynamic template is that an index template applies field mappings and/or index settings when its pattern matches the name of an index. A dynamic template, on the other hand, is applied when a new field is encountered and dynamic mapping is enabled. If the template’s conditions match, the field mapping is added for the new field. A dynamic template is therefore a way to dynamically add mappings for fields that match certain criteria, where an index template adds a fixed set of field mappings.
 
+### Stemming and stop words
+Stemming is the process of reducing words to their root form (e.g. `drinks`, `drunk` -> `drink`). Not all words are stemmed to valid words, depending on how aggressive the stemming is configured to be. Elasticsearch uses stemming internally. 
+
+Stop words are words that do not give much information in term of relevance scoring. Some of these words are `of`, `at`, `on`. However, during text processing those words usually won't be removed because the relevance algorithm has become much better at limiting how much stop words influence search results.
 
 ## Searching for Data
 
