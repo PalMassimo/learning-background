@@ -2116,6 +2116,159 @@ A possible is the following, where
 }
 ```
 
+### Term and terms level queries
+In Elasticsearch there are a few groups of queries, one of which is called `term` level queries, used to search structured data for **exact values**. Term level queries match the exact terms that are stored for a field, meaning that the searches are case sensitive. Term level queries are not analyzed, so the value that we are searching for is left intact and is used as is to lookup values, such as within an inverted index. 
+
+Term level queries can be used together with a couple of data types such as keyword, numbers, dates, etc. 
+
+Never use term level queries on fields with the text data type, because such fields are analyzed so when the query is run elasticsearch will look up the inverted index, made of token that have been processed (e.g. fields are in lowercase and tokenized).
+
+```
+GET /products/_search
+{
+  "query": {
+    "term": {
+      "brand": "Atipici"
+    }
+  } 
+}
+```
+
+If we want we can be more explicit
+
+```
+GET /products/_search
+{
+  "query": {
+    "term": {
+      "brand": {
+        "value": "Atipici"
+        }
+    }
+  } 
+}
+```
+
+Using the explicit syntax we are able to specify more parameters: 
+
+```
+GET /products/_search
+{
+  "query": {
+    "term": {
+      "brand": {
+        "value": "Atipici",
+        "case_insensitive": true
+        }
+    }
+  } 
+}
+```
+
+We can specify an array of items using `terms`: in this case, a document will be returned if it match one or more values
+
+```
+GET /products/_search
+{
+  "query": {
+    "terms": {
+      "brand": [ "Atipici", "Bershka"]
+    }
+  } 
+}
+```
+
+### Retrieving documents by ids
+
+We can retrieve documents by ids 
+
+```
+GET /products/_search
+{
+  "query": {
+    "ids": {
+      "values": [ "100", "200", "300"]
+    }
+  }
+}
+```
+
+### Existing Query
+In elasticsearch we can query documents based on whether or not they contain a value for a field, specifying its name
+
+```
+GET /products/_search
+{
+  "query": {
+    "exists": "tags.keyword"
+  }
+}
+```
+
+This is equivalent to the following SQL query
+
+```sql
+SELECT * FROM products WHERE products.tags IS NOT NULL
+```
+
+**IMPORTANT**:  the query matches documents that contain an indexed value for a field. If we supply an empty value for a field when indexing a document, this value is stored as part of the `_source` object, but no value is indexed.
+An empty value is either `NULL` or an empty array. An empty string instead is not considered an empty value, meaning that documents with this value would be matched by the exists query.
+
+| Field Value | Indexed value |
+| ----------- | ------------- |
+|     NULL    |      N/A      |
+|      []     |      N/A      |
+|      ""     |       ""      |
+
+
+When documents with an empty array provided as `tags` value were indexed, no values were indexed into the inverted index for the field. 
+
+Besides empty values, there are a few other reasons why a document might not have an indexed value for a field. If a value of NULL is provided for a field and its mapping contains the `null_value` parameter, the value of this parameter will be indexed. This means that the document will match an exists query, because a value was indexed. The index mapping parameter can also be set to false within the mapping, in which case the field’s values will not be indexed. It’s also possible that the `ignore_above` parameter is used, and the value is too long, causing it to be ignored in terms of indexing (this parameter default is 256 for keyword fields when dynamic mapping is used; so a value with a length of 400 would be ignored for the keyword mapping but still indexed for the text mapping). Last but not least, the mapping might have the `ignore_malformed` parameter set to true. If this is the case, trying to index a string into a numeric field would cause the value to be ignored, i.e. not indexed. If this parameter is not specified within the mapping, that indexing request would fail instead. By far the most common reasons for there to be no indexed value are that an empty value was provided, or no value was provided at all.
+
+To recap: reason to not index a value:
+- empty value provided (`NULL` or `[]` but NOT the `null_value` parameter)
+- no value provided for the field
+- the `index` mapping parameter for the value is set to `false`
+- the value length is greater than `ignore_above` parameter
+- malformed value with the `ignore_malformed` mapping parameter set to `true`
+
+Now let's suppose we want to run the following sql query 
+
+```sql
+SELECT * FROM products WHERE tags IS NULL
+```
+
+we have to run
+
+```
+GET /products/_search
+{
+  "query": {
+    "bool": {
+      "must_not": [
+        "exists": {
+          "field": "tags.keyword"
+        }
+      }
+    }
+  }
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
