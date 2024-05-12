@@ -1,5 +1,7 @@
 # Hashicorp Certified Terraform Associate 2023
 
+Terraform is an immutable, declarative, Infrastructure as Code provisioning language based on Hashicorp Configuration Language, or optionally JSON. 
+
 ## Deploy infrastructure
 
 ### Provider
@@ -75,6 +77,8 @@ The command `terraform init` generates `.terraform.lock.hcl`, that primarly help
 To know what resources have to be destroyed or created when we run `terraform apply` `terraform destroy` or `terraform plan`, terraform looks to its state file. This file is created by Terraform, in which it stores the state of the infrastructure that is being created from the tf files. This state allows terraform to map real world resource to our existing configuration. The file is called `terraform.tfstate`. 
 
 With `terraform refresh` terraform tries to reconcile the state that Terraform knows (i.e. the one defined in the `terraform.tfstate`) with the current state (i.e. the deployed infrastructure).
+
+Instead of using `terraform refresh`, we can use `terraform apply -refresh-only`.
 
 ## Read, generate and edit configuration
 
@@ -209,9 +213,8 @@ resource "aws_instance" "ec2" {
 ```
 
 ### Data Sources
-Data sources allow data to be fetched or computed for use elsewhere in Terraform configuration
+In Terraform, `data` blocks are used to retrieve data from external sources, such as APIs or databases, and make that data available to your Terraform configuration. With data blocks, you can use information from external sources to drive your infrastructure as code, making it more dynamic and flexible.
 
-...
 
 ### Debugging
 Terraform has detailed logs which can be enabled by setting the `TF_LOG` environment variable to `TRACE`, `DEBUG`, `INFO`, `WARN` or `ERROR`. The `TRACE` value is the most verbose and it is the default if `TF_LOG` is set to something other than a log level name.
@@ -267,6 +270,11 @@ The command `terraform taint` will not modify the infrastructure, but does modif
 
 Note that tainting a resource may affect resources that depend on the newly tainted resource.
 
+The `terraform taint` command is no longer used, because it is replaced by the `terraform apply -replace` command, that replace in one command the resource specified. 
+
+```bash
+terraform apply -replace aws_instance.web
+```
 
 ### Spalat Expressions
 Spalat expressions allow to get a list of all attributes. Suppose having three iam users created with the `count` parameter and defining as much as output variables as the iam users created. Then we can write
@@ -466,6 +474,11 @@ The `null_resource` implements the standard resource lifecycle but takes no furt
 
 ## Terraform Modules
 
+Official terraform providers and modules are owned and maintained by HashiCorp.
+
+### Commands
+To download or update the modules we can use `terraform init` or `terraform get`.
+
 ### Referencing module outputs
 To reference an output variable of a module use the syntax `module.module_name.output_variable_name`
 
@@ -484,7 +497,13 @@ module "ec2-instance" {
 }
 ```
 
-### Publish on Terraform Registry
+When using modules installed from a registry, HashiCorp recommends explicitly constraining the acceptable version numbers to avoid unexpected or unwanted changes. The version argument accepts a version constraint string. Terraform will use the newest installed version of the module that meets the constraint; if no acceptable versions are installed, it will download the newest version that meets the constraint.
+
+A version number that meets every applicable constraint is considered acceptable.
+
+Terraform consults version constraints to determine whether it has acceptable versions of itself, any required provider plugins, and any required modules. For plugins and modules, it will use the newest installed version that meets the applicable constraints.
+
+#### Publish on Terraform Registry
 Anyone can publish and share modules on the terraform registry. Published modules support versioning, automatically generate documentation, allow browsing version histories, show examples and readmes, and more. 
 
 A module in order to be published on the terraform registry must follow the following conventions
@@ -535,6 +554,11 @@ $ tree complex-module/
 |   |-- exampleB/
 |       |-- main.tf
 ```
+
+### Terraform Private Registry
+Terraform Cloud allows users users to publish and mantain custom modules within their organization, providing a secure and controlled environment for sharing infrastructure configurations.
+
+The source strings for private registry modules have source strings as public registry, but with an added hostname prefix `hostname/namespace/name/provider`
 
 ### Terraform Workspaces
 Terraform allows to have multiple workspaces, with each of the workspace we can have different set of environment variable associated. The command to work with workspaces is `terraform workspace`. To show all possible commands associated, run `terraform workspace -h`
@@ -791,6 +815,22 @@ $ terraform import aws_instance.ec2_instance <instance-id>
 
 This will be populate the `terraform.tfstate` file with the detailed configuration about the ec2 instance imported. Now that the resource is managed by terraform, we can edit or destroy it using the `terraform apply` and `terraform destroy` commands.
 
+Another equivalent method is to import resources with the `import` block 
+
+```terraform
+import {
+  to = aws_instance.example
+  id = "i-abcd1234"
+}
+
+resource "aws_instance" "example" {
+  name = "hashi"
+  # (other resource arguments...)
+}
+
+```
+
+
 ## Security Primer
 
 ### Deploy on multiple regions and accounts
@@ -827,7 +867,7 @@ resource "aws_eip" "first_eip"{
 **HashiCorp Vault** allows organizations to securely store secrets like tokens and certificates along with access management. It is able to generate secrets like ec2 key pairs or access keys for an iam user, or credentials for a MySQL database. It can rotate secrets or make it valid for only amount of time. 
 
 
-Initially Vault can be used only through a CLI, but thanks to Hashicorp is now possible to use Vault trough a GUI.
+Initially Vault can be used only through a CLI, but thanks to Hashicorp is now possible to use Vault through a GUI.
 
 Hashicorp Vault can also be used to encrypt and decrypt any kind of data, generate random data and has other useful features.
 
@@ -943,14 +983,49 @@ An air gap is a network security measure employed to ensure that a secure comput
 
 Terraform Enterprise installs using either an online or air gapped method. The first method requires an internet connectivity, the secondo doesn't.
 
+### Merge Request
+After approving a merge request that modifies Terraform configurations in a GitHub repository linked to a Terraform Cloud workspace, the default action that can be expected to run automatically is a "speculative plan" operation.
 
-# Topics to review
-terraform plan -refresh-only command is used to create a plan whose goal is only to update the terraform state to match any changes made to remote objects outside of terraform. It does not apply those changes to the state. 
+When you merge a pull request or push changes to the main branch (or any branch you have configured as the trigger for the workspace), Terraform Cloud typically triggers a plan operation. During this plan phase, Terraform examines the proposed changes to your infrastructure and displays a list of actions it would take if applied. It's a way to preview the changes before actually making them.
 
+The plan output shows what resources Terraform would create, modify, or delete, which allows you to review and validate the expected changes. After reviewing the plan, you can then manually apply the changes to your infrastructure through the Terraform Cloud workspace.
 
+### Terraform Cloud Agents
+Terraform Cloud agents are lightweight programs deployed within your target infrastructure environment. Their primary function is to receive Terraform plans from Terraform Cloud, execute those plans locally, and apply the desired infrastructure changes. This allows you to manage private or on-premises infrastructure with Terraform Cloud without opening your network to public ingress traffic.
 
+## Extra
 
+### Folder Structure
 
+```bash
+$ tree working_directory/
+.
+|-- .terraform/
+    |-- providers/
+    |-- environment
+|-- terraform.tfstate.d
+    |-- development
+        |-- terraform.tfstate
+    |-- test
+        |-- terraform.tfstate
+|-- terraform.tfstate
+|-- terraform.tfvars
+|-- main.tf
+|-- variables.tf
+|-- outputs.tf
+|-- other.tf
+```
+
+the `environment` file contains just the last workspace used (except the default one). 
+
+### Terraform Migration
+When migrating from Terraform Community (Free) to Terraform Cloud, the terraform version of the workspace just created is the same to the one used to perform the migration. This ensures compatibility and consistency with the existing state and configuration.
+
+### Curiosities
+Terraform by default provisions 10 resources concurrently during a `terraform apply` command to speed up the provisioning process and reduce the overall time taken.
+
+### Find a place
+Providers can be installed using multiple methods, including downloading from a Terraform public or private registry, the official HashiCorp releases page, a local plugins directory, or even from a plugin cache. Terraform cannot, however, install directly from the source code.
 
 
 
