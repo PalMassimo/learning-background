@@ -78,7 +78,7 @@ Console.ReadKey();
 
 ...
 
-# Object Oriented Programming
+# Object Oriented Programming Fundamentals
 
 In `c#` we have `struct`, `class` and `record` and not just classes but they are basically the same.
 
@@ -94,7 +94,170 @@ class Rectangle
 By default members of a class are private and if not specified it has a default constructor `Rectangle()`.
 Names of public member fields should start with the capital letter, instead private members should start the `_`. 
 
+## Constructor overloading
+We can define multiple constructors inside our class definitions. We can use the `this` keyword to avoid code repetition
+
+```cs
+class Rectangle
+{
+    int Width;
+    int Height;
+
+    public Rectangle(int width)
+    {
+        Width = width;
+        Height = 10
+    }
+
+    public Rectangle(int width, int height)
+    {
+        Width = width;
+        Height = height
+    }
+}
+```
+
+```cs
+class Rectangle
+{
+    int Width;
+    int Height;
+
+    public Rectangle(int width) : this(width, 10)
+    {
+    }
+
+    public Rectangle(int width, int height)
+    {
+        Width = width;
+        Height = height;
+    }
+}
+```
+
+## Expression-bodied methods
+A `statement` is something that does not evaluate to a value, like `Console.WriteLine()` or `if(condition) {}`
+
+An `expression` is something that evaluates to a value, like `1+2` or `GetText()`
+
+If we have methods that contains only one statement or expression, we can use expression-bodied method syntax, to write concise code. 
+
+```cs
+public class Rectangle
+{
+    int Width;
+    int Height;
+
+    public int calculateArea() => Width*Height;
+}
+```
+
+## `this` keyword
+We can use `this` to refer to the current instance of a class
+
+```cs
+public Rectangle(int Width, int Height)
+{
+    this.Width = Width;
+    this.Height = Height;
+
+    RectangleAreaCalculator calculator = new RectangleAreaCalculator(this);
+
+    Console.WriteLine(calculator.compute())
+}
+```
+
+## Optional Parameters
+Optional parameters must appear after all required parameters.
+The default value of an optional parameter must be compile-time constant.
+In case of amibuity about what method invoke, `c#` will choose the one with no optional parameters. 
+
+```cs
+public Dog CreateDog(string name, int age = 0)
+{
+    return new Dog(name, age);
+}
+```
+
+## `nameof`
+We can use the built-in function `nameOf` to get the name of a variable
+
+```cs
+var x = 10;
+var xName = nameOf(x); // "x"
+```
+
+## `readonly` and `const`
+A `readonly` field can only be assigned at the declaration or in the constructor
+
+```cs
+public class Rectangle
+{
+    public readonly int Width;  // = 0 declaration
+    public readonly int Height;
+
+    public Rectangle(int width, int height)
+    {
+        Width = width;
+        Height = height;
+    }
+}
+
+var rectangle = new Rectangle(2, 3);
+// rectangle.Width = 10; not allowed
+```
+
+Immutability means that once an object is created it will never be modified. In other words, an object is `immutable` when none if its fields can be modified.
+
+Const modifier can be applied to both variables and fields. Those variables and fields must be assigned at declaration and can never be modified afterward. They must be given a compile-time constant value, so a value that can be evaluated during the compilation, before the application is run.
+
+`const` variable names should always start with a capital letter. 
+
+
+## Properties
+Properties and fields are different. To go deeper review the lecture. 
+
+| Fields                                  | Properties                                      |
+| --------------------------------------- | ----------------------------------------------- |
+| variable-like                           | method-like                                     |
+| single access modifier                  | separate access modifiers for getter and setter |
+| no separate getter and setter           | getter and setter may be removed                |
+| cannot be overridden in derived classes | can be overriden in derived classes             |
+| should be private                       | can safely be public                            |
+
+<br/>
+
+A class `Order` with two properties
+
+```cs
+public class Order
+{
+    public string Item { get; }
+    
+    private DateTime _date; // backin field
+    
+    public DateTime Date
+    {
+        get { return _date; }
+        set
+        {
+            if (value.Year == DateTime.Now.Year)
+            {
+                _date = value;
+            }                
+        }
+    }
+    
+    public Order(string item, DateTime date)
+    {
+        Item = item;
+        Date = date;
+    }
+}
+```
+
 ...
+
 
 # ...
 
@@ -377,3 +540,415 @@ public class SomeAttribute: Attribute
     }
 }
 ```
+
+## Structs
+The main difference between classes and struct is that classes are reference types, struct are value types instead. 
+
+`struct` derive from `System.ValueType`, which in turn derives from `System.Object`. Structs can have fields, constructors and methods. 
+
+A `struct` is a value type, so when you assign a struct to another struct, a complete copy of the value is made, hence changes to the new struct do not affect the original. Structs are stored on the stack, so it is better to not use them to store big amount of data. Value types hold their data directly. 
+
+```cs
+struct Point
+{
+    int X { get; set; }
+    int Y { get; set; }
+
+    public Point(x, y)
+    {
+        X = x;
+        Y = y;
+    }
+} 
+```
+
+### `struct` versus `class`
+Structures are value types, instead classes are reference types. Only reference types can be assigned to `null`, so a `struct` cannot be `null`. 
+
+All `struct` are sealed, i.e. cannot be inherited: the following code does not compile
+
+```cs
+struct DerivedPoint : Point
+{
+
+}
+```
+
+Since struct are not inheritable, we cannot define abstract methods. However, struct can implement interfaces. 
+
+Interfaces are reference types, so if a struct is passed to a method expecting a parameter of an interface type, this struct will have to be boxed.
+
+A `struct` will always have a default constructor. 
+
+A `struct` cannot have finalizers.
+
+A `struct` cannot have a cycle in its definition: the following code does not compile
+
+```cs
+public struct Point {
+    // Point cannot reference Point
+    public Point ClosestPoint { get; } 
+}
+```
+
+Usually we choose a `struct` over a `class` if 
+- value semantic
+- the type is small and data-centric, with little or no behavior
+- value-based equality check
+- type not frequently boxed
+- type will not store data of reference types
+- immutable data
+
+...
+
+# Collections
+Collections are types implementing specific interfaces that define methods for collection manipulation. Main collections in `c#` are `IList`, which derives from `ICollection` which derives from `IEnumerable`. 
+
+## `IEnumerable`
+`IEnumerable` is an interface which allows to iterate a type with a `foreach` loop. Therefore, we cannot use `foreach` loop with a type which does not implement the `IEnumerable` interface.
+
+The `foreach` loop is just a syntactic sugar to iterate over a collection. When compiled, it will be transformed in something like the following
+
+```cs
+var words = new string[]{"aaa", "bbb", "ccc"};
+foreach (var word in words)
+{
+    Console.WriteLine(word);
+}
+```
+
+```cs
+IEnumerator wordsEnumerator = words.GetEnumerator();
+object currentWord;
+
+while(wordsEnumerator.MoveNext())
+{
+    currentWord = wordsEnumerator.Current;
+    Console.WriteLine(currentWord);
+}
+```
+
+`IEnumerable` does not expose any method to modify collection: we can only enumerate items. This interface only contains a single method that returns an object implementing the non-generic IEnumerator interface. In programming, an `enumerator` is a mechanism that allows iterating over a collection.
+
+Let's implement the `IEnumerable` non generic type:
+
+```cs
+var customCollection = new CustomCollection(["aaa", "bbb"]);
+
+foreach(var item in customCollection)
+{
+    Console.WriteLine(item);
+}
+
+Console.ReadKey();
+class CustomCollection : IEnumerable
+{
+    string[] Words { get; }
+
+    public CustomCollection(string[] words)
+    {
+        Words = words;
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return new WordEnumerator(Words);
+    }
+}
+
+public class WordEnumerator : IEnumerator
+{
+    private int _currentPosition;
+    private readonly string[] _words;
+
+    public WordEnumerator(string[] words)
+    {
+        _words = words;
+        _currentPosition = -1;
+    }
+
+    public object Current => _words[_currentPosition];
+
+    public bool MoveNext()
+    {
+        _currentPosition++;
+
+        if(_currentPosition < _words.Length)
+        {
+            return true;
+        }
+        else
+        { 
+            return false; 
+        }
+    }
+
+    public void Reset()
+    {
+        _currentPosition = 0;
+    }
+}
+```
+
+The only inconvinient of this approach is that the `item` is of the type `object` and not of the type `string`. To fix this, we have to implement the generic type `IEnumerable<T>` interface. 
+
+```cs
+public interface IEnumerable<out T> : IEnumerable
+{
+    IEnumerator<T> GetEnumerator();
+}
+```
+
+Since `IEnumerable<T>` interface implements `IEnumerable`, we have to define both `IEnumerator<T> GetEnumerator` and `IEnumerator GetEnumerator`. However, this will bring us to define two methods with the same name and the same arguments
+
+```cs
+public IEnumerator GetEnumerator(){ ... } // because of IEnumerable
+public IEnumerator<string> GetEnumerator() { ... } // because of IEnumerable<T>
+```
+
+In such cases we have to use **explicit interface implementation**, used to resolve cases where two implemented interfaces declare different members with the same name and parameters:
+
+```cs
+IEnumerator IEnumerable.GetEnumerator(){ ... } // explicit 
+public IEnumerator<string> GetEnumerator() { ... } // implicit
+```
+
+note that we cannot use any access modifiers when we use explicit interface implementation, so we had to remove the `public` access modifier.
+
+Now, to make the code calling the first or another `GetEnumerator`, if we use the `var` keyword the implicit will be called. If we want to invoke the explicit we have to use an explicit type. This explains why we couldn't have an access modifier specified for this method. An explicit interface implementation doesn't have an access modifier since it isn't accessible as a member of the type it's defined in. Instead, it is only accessible when called to an instance of the interface.
+
+```cs
+var customCollection = new CustomCollection(new string[]{"aaa", "bbb"});
+var enumerator = customCollection.GetEnumerator();
+IEnumerable customCollection = customCollection.GetEnumerator();
+```
+
+To make the code works we end up to the following code
+
+```cs
+class CustomCollection : IEnumerable<string>
+{
+    string[] Words { get; }
+
+    public CustomCollection(string[] words)
+    {
+        Words = words;
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return new WordEnumerator(Words);
+    }
+
+    public IEnumerator<string> GetEnumerator()
+    {
+        return new WordEnumerator(Words);
+    }
+}
+```
+
+We have to implement also the `Dispose()` method, probably because of dot net developers mistake.
+
+```cs
+public class WordEnumerator : IEnumerator<string>
+{
+    private int _currentPosition;
+    private readonly string[] _words;
+
+    public WordEnumerator(string[] words)
+    {
+        _words = words;
+        _currentPosition = -1;
+    }
+
+    public string Current => _words[_currentPosition];
+
+    object IEnumerator.Current => Current;
+
+    public bool MoveNext()
+    {
+        _currentPosition++;
+
+        if (_currentPosition < _words.Length)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public void Reset()
+    {
+        _currentPosition = 0;
+    }
+
+    public void Dispose()
+    {
+     
+    }
+}
+```
+
+## Indexers
+An **indexer** allows an object to be indexed like an array, so something like
+
+```cs
+var item = customClass[key];
+customClass[anotherKey] = value;
+```
+
+The key usually is an `int`, but can be any object as a string (e.g. dictionaries). To implement such feature in our `CustomCollection` class
+
+```cs
+class CustomCollection : IEnumerable<string>
+{
+    string[] Words { get; }
+
+    public string this[int index]
+    {
+        get { 
+            return Words[index];
+        }
+        set
+        {
+            Words[index] = value;
+        }
+    }
+}
+```
+
+## Collection Initializers
+We want to be able to use the collection initializer also for our `CustomCollection`
+
+```cs
+var list = new List<int>(10) {1, 2};
+
+var customCollection = new CustomCollection {"aa", "bb"}
+```
+
+The code will not compile because it is translated in the following
+
+```cs
+var customCollection = new CustomCollection();
+customCollection.Add("aa");
+customCollection.Add("bb");
+```
+
+Therefore, `CustomCollection` must have the empty constructor and the `Add()` method. Instead, if we want to be able to write `new CustomCollection(10){"aa", "bb"}` we have to have the `public CustomCollection(int i){}` constructor. 
+
+To reach this we have to add the following code to `CustomCollection` class
+
+```cs
+class CustomCollection
+{
+    public CustomCollection()
+    {
+        Words = new string[10];
+    }
+
+    private int _currentIndex = 0;
+
+    public void Add(string item)
+    {
+        Words[_currentIndex] = item;
+        ++_currentIndex;
+    }
+}
+```
+## ...
+
+
+## `yield` statement
+If we want only some element of a collection that potentially has bilion of elements, it is a waste of resources build it from scratch everytime. To get only the elements we want to use we can use the `yield` statement
+
+The code we want to execute
+
+```cs
+var evenNumbers = GenerateEvenNumbers();
+evenNumbers.Skip(5).Take(10);
+evenNumbers.First();
+```
+
+We can transform the following code
+
+```cs
+public IEnumerable<int> GenerateEvenNumbers()
+{
+    var evenNumbers = new List<int>();
+    for (int i = 0; i < int.Max; i + 2)
+    {
+        evenNumbers = i;
+    }
+    return evenNumbers;
+}
+```
+
+to the following
+
+```cs
+public IEnumerable<int> GenerateEvenNumbers()
+{
+    for (int i = 0; i < int.Max; i + 2)
+    {
+        yield return i;
+    }
+}
+```
+
+In this way will be generated only the needed elements and they are generated one at a time. 
+
+The previous snippet won't be executed immediately when is reached because it is translated similar to the following, i.e. it is translated in an `Iterator` definition
+
+```cs
+IEnumerable<int> GenerateEvenNumbers()
+{
+    return new Iterator
+    {
+        currentIteration = 0;
+        MethodGeneratingSequence = ...
+    }
+}
+```
+
+Two conditions must be met to make a method an iterator method:
+- must have a `yield` statement inside
+- must return either `IEnumerable` or `IEnumerator`
+
+where the next execution will start after the `yield` statement.
+
+**Note**: if we iterate an iterator with a new `foreach` loop it gets reset. 
+
+If we want to write a method that given a list of integers it returns the elements before the first negative one, we can use the `yield break` statement.
+
+```cs
+IEnumerable<int> GetBeforeFirstNegative(IEnumerable<int> input)
+{
+    foreach(var number in input)
+    {
+        if(number >= 0)
+        {
+            yield return number;
+        }
+        else 
+        {
+            yield break;
+        }
+    }
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
