@@ -940,11 +940,93 @@ IEnumerable<int> GetBeforeFirstNegative(IEnumerable<int> input)
 ```
 
 
+## Interface Segregation Principle
+The **Interface Segregation Principle** belongs to SOLID and it states that
+- no code should be forced to depend on methods it does not use
+- no class should be forced to implement methods from an interface when those methods do not fit in the class
+
+## Read-Only Collections
+Let's consider the following code
+
+```cs
+var planets = ReadPlanets();
+planets.Clean();
+
+List<string> ReadPlanets()
+{
+    var result = new List<string>
+    {
+        "Alderaan",
+        "Coruscant",
+        "Bespin"
+    }
+}
+```
+
+If we want to make a collection read-only a first approach could be changing the result type `IEnumerable<string>` to make the `planets.Clear()` a compiler error. However we can run the `Clear()` method could be run if we use casting
+
+```cs
+var planets = ReadPlanets();
+var planetsAsList = (List<string>) planets;
+planetsAsList.Clear();
+```
+
+Another approach is to use `ReadOnlyCollection`, that implements `IList` interface.
+
+For dictionaries we have `ReadOnlyDictionary`
+
+```cs
+var dictionary = new Dictionary<string, int>
+{
+    ["aaa"] = 1
+};
+
+var readOnlyDictionary = new ReadOnlyDictionary<string, int>(dictionary);
+```
 
 
+## Queue
+C# sdk offers the `Queue` class that implements queue data structure
 
+```cs
+var queue = new Queue<string>();
+queue.Enqueue("a");
+queue.Enqueue("b");
+queue.Enqueue("c");
 
+var first = queue.Dequeue();
+var second = queue.Peek(); // get an element without removing it
 
+```
+
+We also can use the `PriorityQueue` that takes two arguments: the first is the type of the items composing the queue, the second is the type of priority
+
+```cs
+var priorityQueue = new PriorityQueue<string, int>();
+priorityQueue.Enqueue("a", 5);
+priorityQueue.Enqueue("b", 5);
+priorityQueue.Enqueue("c", 2);
+priorityQueue.Enqueue("d", 3);
+
+priorityQueue.Dequeue(); // is "c"
+```
+
+hence the smaller the number, the higher the priority. If two items have the same priority, the element dequeued is the element put first. 
+
+## Stack
+C# offers also the `Stack` class
+
+```cs
+var stack = new Stack<string>();
+stack.Push("a");
+stack.Push("b");
+stack.Push("c");
+
+stack.Pop();  // "c"
+stack.Peek(); // "b"
+```
+
+where again the `Peek` method get an element withouth removing it.
 
 
 
