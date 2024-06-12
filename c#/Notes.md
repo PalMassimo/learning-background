@@ -76,6 +76,30 @@ string userLine = Console.ReadLine();
 Console.ReadKey();
 ```
 
+## String interpolation
+Instead of using string concatenation, we can use string interpolation
+
+```cs
+int a = 1, b = 2;
+
+// string concatenation
+Console.WriteLine("a = " + a + ", b = " + b + ".");
+
+// string interpolation
+Console.WriteLine($"a = {a}, b = {b}.");
+
+// we can make operations in the string
+Console.WriteLine($"a + b = {a+b}");
+```
+
+## Chars
+The type `char` is indicated with single quote `'` instead of a double quote `"`
+
+```cs
+char a = '!';
+string b = "!";
+```
+
 ...
 
 # Object Oriented Programming Fundamentals
@@ -298,6 +322,24 @@ var default_string = default(string) // will be null
 
 default_T = default // type is inferred
 ```
+
+# LINQ
+**Language Integrated Query - LINQ** is a set of technologies that allow simple and efficient querying over different kinds of data. It offers two syntax: `method syntax` and `query syntax`. The first is the most common and easy to use
+
+Method syntax
+
+```cs
+var evenNumbers = numbers.Where(n => n % 2 == 0);
+```
+
+Query syntax
+```cs
+var evenNumbers = from number in numbers
+                  where number % 2 == 0
+                  select number;
+```
+
+LINQ can work with other types of collections like databases or XML files.
 
 ...
 
