@@ -280,8 +280,70 @@ public class Order
 }
 ```
 
-...
+## Object Initializers
+Object initializers provide another method to insantiate objects
 
+```cs
+var person = new Person()
+{
+ Name: "Luca",
+ Age: 20
+}
+```
+
+in this way we are calling the constructor `constructor Person()` and then we are setting the fields through the `set` methods, that must be public. We can provide as many fields as we want; the ones not specified they will be set to their default values.
+
+If we want to use object initializers but not set the `set` method as public, we can use the `init` keyword. This allows to set the field only on the object initialization
+
+```cs
+public class Person
+{
+ Name { get; set; }
+ Age { get; init; }
+}
+```
+
+## Computed Properties
+Sometimes properties don't wrap any field but return a computed result instead.
+
+```cs
+class Rectangle
+{
+ // describes a get only property
+ public Description = $"Width: {_widt}, height: {Height}";
+}
+```
+properties should never be performance heavy.
+
+We should use computed properties when they represent data, we should use methods if we want to represent actions.
+
+## Static Methods and Classes
+A static class can only have static methods, but a non static class can have static methods. 
+
+```cs
+static class Calculator
+{
+ static int Add(int a, int b) => a + b;
+}
+```
+
+Static methods cannot access static fields. 
+
+All const fields are implicitly `static`.
+
+To initialize the static variables we can define them inline or using the `static` constructor
+
+```cs
+public class Rectangle
+{
+ private static DateTime _firstInstance; // = DateTime.Now;
+ 
+  static Constructor()
+  {
+   _firstInstance = DateTime.Now;
+  }
+}
+```
 
 # ...
 
