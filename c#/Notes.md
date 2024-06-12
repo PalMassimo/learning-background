@@ -100,7 +100,75 @@ char a = '!';
 string b = "!";
 ```
 
-...
+## Namespaces
+**Namespaces** declare a scope which contains a set of related types.
+
+Type not placed in any named namespace belongs to the `global namespace`. 
+
+Namespaces names should match the folders structure
+
+To use namespace
+
+```cs
+namespace MyPersonalNamespace
+{
+    public class MyClass
+    {
+        // ...
+    }
+}
+```
+
+From c# version 10 we can use *file scoped namespace declaration*
+
+```cs
+namaspace MyPersonalNamespace;
+
+public class MyClass
+{
+    // ...
+}
+```
+
+In both cases, the class `MyClass` belongs to the namespace `MyPersonalNamespace`.
+
+To use it in another namespace
+
+```cs
+using MyPersonalNamespace;
+
+var myClass = new MyClass();
+```
+
+## Global using directives
+Instead of import a namespace in every single file we can use global directorives
+
+```cs
+global using MyNamespace
+```
+
+but the `global` directive must be before all `using` directives.
+
+If some using directives are not needed in the code is because the IDE generates a file containing global directives of the most used namespaces.
+
+Global directives are suggested if we repeat a namespace very often in the project. In such cases, consider to create a file containing all global directives.
+
+## Time Measure
+We can use `System.Diagnostic` to measure code performance
+
+```cs
+using System.Diagnostic;
+
+var stopwatch = Stopwatch.StartNew();
+
+for(int i = 0; i < 100; i++)
+{
+    Console.WriteLine("something");
+}
+
+stopwatch.Stop();
+
+Console.WriteLine($"Time in milliseconds {stopwatch.ElapsedMilliseconds}");
 
 # Object Oriented Programming Fundamentals
 
