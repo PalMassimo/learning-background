@@ -129,6 +129,57 @@ for (int i = 0; i < 10; i++)
 }
 ```
 
+If can also use the `foreach` loop
+
+```cs
+string[] words = new string[]{ "miao", "bau"};
+
+foreach(var word in words)
+{
+    Console.WriteLine(word);
+}
+```
+
+## Arrays
+The array is the most basic collection type in C#, storing multiple elements of the same type. The size of the array, once created, cannot be changed.
+
+Arrays are classes. To create a new class, we have to use `new` keyword.
+
+We can use the `^` to get an element of the array
+
+```cs
+int[] numbers = new int[3];
+
+// to get the last element
+var lastElement = numbers[^1];
+var secondToLastElement = numbers[^2];
+```
+
+We can use array initializer to initialize array values
+
+```cs
+int[] integers = new int[]{1, 2, 3, 4};
+```
+
+## Bidimensional Arrays
+We can define arrays having more than one dimension
+
+```cs
+int[,] integers = new int[2,3];
+// or
+int [,] strings = new int[,]{
+    {1, 2, 3},
+    {4, 5, 6}
+};
+
+// To access an element
+var integer = integers[0, 2];
+
+// to get length of dimensions
+var width = integers.GetLength(0);
+var height = integers.GetLength(1);
+```
+
 # Object Oriented Programming Fundamentals
 
 In `c#` we have `struct`, `class` and `record` and not just classes but they are basically the same.
