@@ -1,2 +1,4 @@
 node_modules/
 project/
+code/
+Terraform/lambda/

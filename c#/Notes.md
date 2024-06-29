@@ -180,6 +180,54 @@ var width = integers.GetLength(0);
 var height = integers.GetLength(1);
 ```
 
+## `out` keyword
+The `out` keyword allows to pass a parameter inside a function and set its value
+
+```cs
+var numberOfElements = 0;
+List<string> elements =
+[
+    "element-1",
+    "element-2"
+];
+
+
+AppendElement(elements, out numberOfElements);
+
+Console.WriteLine($"Integer value is {numberOfElements}");
+
+string AppendElement(List<string> elements, out int numberOfElements)
+{
+    string newElement = "new-element";
+    elements.Add(newElement);
+    numberOfElements = elements.Count;
+
+    return newElement;
+}
+```
+
+## Try parse method
+Instead of using the `int.Parse(numberAsString))` method that can throw an error if the parameter string is not a valid integer number, we can use `int.TryParse(numberAsString, out int number)` method.
+
+If the string is valid it returns `true` and put the number in `number` parameter, otherwise it returns false and set `number` to its default value (i.e. `0`)
+
+```cs
+Console.WriteLine("Write a number");
+string? numberAsString = Console.ReadLine();
+
+bool isNumberInserted = int.TryParse(numberAsString, out int number);
+
+if(isNumberInserted)
+{
+    Console.WriteLine($"User write {number}");
+}
+else 
+{
+    Console.WriteLine($"Invalid string inserted. Number is set to its default value: {number}");
+}
+```
+
+
 # Object Oriented Programming Fundamentals
 
 In `c#` we have `struct`, `class` and `record` and not just classes but they are basically the same.
