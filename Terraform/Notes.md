@@ -182,7 +182,7 @@ The count parameter on resources can simplify configurations and let scale resou
 
 ```terraform
 resource "aws_instance" "ec2" {
-    cunt = 5
+    count = 5
     ami = "ami-08vds056vf8d6"
     instance_type = "t3.small"
     tags = {
@@ -244,7 +244,7 @@ dynamic "ingress" {
 }
 ```
 
-The **iterator** argument (optional) sets the name of a temporary variable that represents the current element of the complex value. If omitted, the name of the variable deafults to the label of the dynamic block (e.g. "ingress" in tge example above)
+The **iterator** argument (optional) sets the name of a temporary variable that represents the current element of the complex value. If omitted, the name of the variable deafults to the label of the dynamic block (e.g. "ingress" in the example above)
 
 ```terraform
 dynamic "ingress" {
@@ -487,7 +487,7 @@ The **Terraform Registry** is a repository of modules written by the terraform c
 
 Verified modules are reviewed by HashiCorp and actively maintained by contributors to stay up to date and compatible with both terraform and their respective providers. Such modules are marked with a blue verification badge and can be written only by a small group of trusted HashiCorp partners. 
 
-It follows an example of a module present in the terraform registry
+It follows an example of a module available in the terraform registry
 
 ```terraform
 module "ec2-instance" {
@@ -556,7 +556,7 @@ $ tree complex-module/
 ```
 
 ### Terraform Private Registry
-Terraform Cloud allows users users to publish and mantain custom modules within their organization, providing a secure and controlled environment for sharing infrastructure configurations.
+Terraform Cloud allows users to publish and mantain custom modules within their organization, providing a secure and controlled environment for sharing infrastructure configurations.
 
 The source strings for private registry modules have source strings as public registry, but with an added hostname prefix `hostname/namespace/name/provider`
 
@@ -662,6 +662,14 @@ Depending on the environments, it is recommended to avoid committing certain fil
 ### Terraform Backend
 Backends primarily determine where terraform stores its state. By default, terraform implicitly uses a backend called `local` to store state in a local file on disk.
 
+```terraform
+terraform {
+  backend "local" {
+    path = "relative/path/to/terraform.tfstate"
+  }
+}
+```
+
 To make a terraform project able to be handled by a team, we have to store the `terraform.tfstate` in a central backend, instead the code on a central git repository.
 Terraform supports multiple backends that allows remote service related operations. Some of the most popular are
 - s3
@@ -715,7 +723,7 @@ terraform {
         key        = "network/terraform.tfstate"
         region     = "us-east-1"
 
-        dynamodb_table = "terraform-state-locking
+        dynamodb_table = "terraform-state-locking"
      }
 }
 ```
@@ -926,8 +934,8 @@ We can set a github repository as source from which we can trigger events
 We can associate sentinels set policies to workspace. A sentinel policy is a rule that checks if resources that are going to be deployed satisfy such constraints. Rules depends on which provider the resources belong to.
 
 An example of sentinel policy checks if a resource has a tag or not. We can set one of the following to the sentinel policy:
-- `hard-mandatory`, cannot ovveride
-- `soft-mandatory`, can ovveride
+- `hard-mandatory`, cannot overide
+- `soft-mandatory`, can override
 - `advisory`, logging only
 
 Sentinels do not prevent to manual changes from the console. Sentinels are a paid feature.
@@ -1003,10 +1011,10 @@ $ tree working_directory/
 |-- .terraform/
     |-- providers/
     |-- environment
-|-- terraform.tfstate.d
-    |-- development
+|-- terraform.tfstate.d/
+    |-- development/
         |-- terraform.tfstate
-    |-- test
+    |-- test/
         |-- terraform.tfstate
 |-- terraform.tfstate
 |-- terraform.tfvars
